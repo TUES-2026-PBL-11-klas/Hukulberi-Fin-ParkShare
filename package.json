@@ -7,7 +7,10 @@
     "doc": "docs"
   },
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "ci:build": "npm run build --workspace=@parkshare/contracts && npm run build --workspace=backend && npm run build --workspace=frontend",
+    "ci:lint": "npm run lint:check --workspace=backend && npm run lint --workspace=frontend",
+    "ci:test": "npm run test --workspace=backend -- --runInBand",
+    "test": "npm run ci:test"
   },
   "repository": {
     "type": "git",
