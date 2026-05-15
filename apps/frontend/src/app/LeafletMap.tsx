@@ -21,6 +21,7 @@ export default function LeafletMap() {
   const mapInstanceRef = useRef<import("leaflet").Map | null>(null);
   const tileLayerRefs = useRef<import("leaflet").TileLayer[]>([]);
   const [theme, setTheme] = useState<MapTheme>("light");
+  const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
 
   useEffect(() => {
     if (!mapRef.current || mapInstanceRef.current) {
@@ -77,6 +78,33 @@ export default function LeafletMap() {
   return (
     <div className="relative h-screen w-screen" data-map-theme={theme}>
       <div ref={mapRef} className="h-full w-full" />
+      <button
+        type="button"
+        className="map-profile-button"
+        aria-label="Open profile menu"
+        aria-expanded={isProfileMenuOpen}
+        onClick={() => setIsProfileMenuOpen((isOpen) => !isOpen)}
+      >
+        <svg
+          aria-hidden="true"
+          viewBox="0 0 24 24"
+          className="h-6 w-6"
+          fill="none"
+          stroke="currentColor"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          strokeWidth="2"
+        >
+          <circle cx="12" cy="8" r="4" />
+          <path d="M5 21a7 7 0 0 1 14 0" />
+        </svg>
+      </button>
+      {isProfileMenuOpen ? (
+        <div className="map-profile-menu">
+          <button type="button">Sign up</button>
+          <button type="button">Log in</button>
+        </div>
+      ) : null}
       <button
         type="button"
         className="map-theme-toggle"
