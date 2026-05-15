@@ -28,10 +28,10 @@ body {
 .leaflet-control-zoom {
   overflow: hidden;
   border: 0;
-  border-radius: 9999px;
-  background: rgb(255 255 255 / 0.88);
-  box-shadow: 0 18px 40px rgb(15 23 42 / 0.18);
-  backdrop-filter: blur(12px);
+  border-radius: 1.375rem;
+  background: var(--map-control-bg);
+  box-shadow: var(--map-control-shadow);
+  backdrop-filter: blur(14px);
 }
 
 .leaflet-touch .leaflet-control-zoom,
@@ -41,14 +41,14 @@ body {
 
 .leaflet-control-zoom a,
 .leaflet-touch .leaflet-control-zoom a {
-  width: 44px;
-  height: 44px;
+  width: 46px;
+  height: 46px;
   border: 0;
   background: transparent;
-  color: #0f172a;
+  color: var(--map-control-text);
   font-size: 22px;
   font-weight: 600;
-  line-height: 44px;
+  line-height: 46px;
   transition:
     background-color 160ms ease,
     color 160ms ease;
@@ -56,32 +56,65 @@ body {
 
 .leaflet-control-zoom a:hover,
 .leaflet-control-zoom a:focus {
-  background: rgb(15 23 42 / 0.08);
-  color: #006c49;
+  background: var(--map-control-hover);
+  color: var(--map-control-accent);
 }
 
 .leaflet-control-zoom-in {
-  border-radius: 9999px 9999px 0 0;
+  border-radius: 1.375rem 1.375rem 0.5rem 0.5rem;
 }
 
 .leaflet-control-zoom-out {
-  border-radius: 0 0 9999px 9999px;
+  border-radius: 0.5rem 0.5rem 1.375rem 1.375rem;
 }
 
-@media (prefers-color-scheme: dark) {
-  .leaflet-control-zoom {
-    background: rgb(15 23 42 / 0.82);
-    box-shadow: 0 18px 40px rgb(0 0 0 / 0.34);
-  }
+.map-theme-toggle {
+  position: absolute;
+  right: 10px;
+  bottom: 112px;
+  z-index: 1000;
+  display: inline-flex;
+  width: 46px;
+  height: 46px;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 9999px;
+  background: var(--map-control-bg);
+  color: var(--map-control-text);
+  box-shadow: var(--map-control-shadow);
+  backdrop-filter: blur(14px);
+  cursor: pointer;
+  font-size: 21px;
+  line-height: 1;
+  transition:
+    background-color 160ms ease,
+    color 160ms ease,
+    transform 160ms ease;
+}
 
-  .leaflet-control-zoom a,
-  .leaflet-touch .leaflet-control-zoom a {
-    color: #f8fafc;
-  }
+.map-theme-toggle:hover,
+.map-theme-toggle:focus-visible {
+  background: var(--map-control-hover);
+  color: var(--map-control-accent);
+}
 
-  .leaflet-control-zoom a:hover,
-  .leaflet-control-zoom a:focus {
-    background: rgb(255 255 255 / 0.12);
-    color: #4edea3;
-  }
+.map-theme-toggle:active {
+  transform: scale(0.96);
+}
+
+[data-map-theme="light"] {
+  --map-control-bg: rgb(255 255 255 / 0.9);
+  --map-control-text: #0f172a;
+  --map-control-accent: #006c49;
+  --map-control-hover: rgb(15 23 42 / 0.08);
+  --map-control-shadow: 0 18px 40px rgb(15 23 42 / 0.2);
+}
+
+[data-map-theme="dark"] {
+  --map-control-bg: rgb(15 23 42 / 0.86);
+  --map-control-text: #f8fafc;
+  --map-control-accent: #4edea3;
+  --map-control-hover: rgb(255 255 255 / 0.12);
+  --map-control-shadow: 0 18px 40px rgb(0 0 0 / 0.38);
 }
