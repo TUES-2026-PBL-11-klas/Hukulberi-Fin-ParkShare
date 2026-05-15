@@ -18,13 +18,33 @@ export default function LeafletMap() {
       }
 
       const L = await import("leaflet");
-      const map = L.map(mapRef.current).setView([42.6977, 23.3219], 13);
+      const prefersDark = window.matchMedia(
+        "(prefers-color-scheme: dark)",
+      ).matches;
+      const map = L.map(mapRef.current, {
+        attributionControl: false,
+        zoomControl: false,
+      }).setView([42.6977, 23.3219], 13);
 
-      L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
-        maxZoom: 19,
-        attribution:
-          '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
-      }).addTo(map);
+      L.control.zoom({ position: "bottomright" }).addTo(map);
+
+      L.tileLayer(
+        prefersDark
+          ? "https://{s}.basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}{r}.png"
+          : "https://{s}.basemaps.cartocdn.com/rastertiles/voyager_nolabels/{z}/{x}/{y}{r}.png",
+        {
+          maxZoom: 19,
+        },
+      ).addTo(map);
+
+      L.tileLayer(
+        prefersDark
+          ? "https://{s}.basemaps.cartocdn.com/dark_only_labels/{z}/{x}/{y}{r}.png"
+          : "https://{s}.basemaps.cartocdn.com/light_only_labels/{z}/{x}/{y}{r}.png",
+        {
+          maxZoom: 19,
+        },
+      ).addTo(map);
 
       cleanup = () => {
         map.remove();
