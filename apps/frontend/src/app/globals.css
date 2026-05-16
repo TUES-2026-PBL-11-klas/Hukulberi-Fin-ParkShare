@@ -324,8 +324,33 @@ body {
   opacity: 0.92;
 }
 
+.auth-form > button:disabled {
+  cursor: not-allowed;
+  opacity: 0.64;
+}
+
 .auth-form > button:active {
   transform: scale(0.98);
+}
+
+.auth-error,
+.auth-success {
+  margin: -0.25rem 0 0;
+  border-radius: 0.75rem;
+  padding: 0.75rem 0.875rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.auth-error {
+  background: #fff1f2;
+  color: #be123c;
+}
+
+.auth-success {
+  background: #ecfdf5;
+  color: #047857;
 }
 
 .auth-switch-copy {

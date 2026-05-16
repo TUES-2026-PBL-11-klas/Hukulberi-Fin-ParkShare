@@ -4,6 +4,20 @@ import { useEffect, useRef, useState } from "react";
 
 type MapTheme = "light" | "dark";
 type AuthMode = "login" | "signup";
+type AuthUser = {
+  id: string;
+  email: string;
+  name: string;
+  role: string;
+};
+
+type AuthResponse = {
+  user: AuthUser;
+  accessToken: string;
+};
+
+const apiBaseUrl =
+  process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:3001";
 
 const tileLayers = {
   light: {
@@ -27,6 +41,14 @@ export default function LeafletMap() {
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
   const [isAuthOpen, setIsAuthOpen] = useState(false);
   const [authMode, setAuthMode] = useState<AuthMode>("login");
+  const [authName, setAuthName] = useState("");
+  const [authEmail, setAuthEmail] = useState("");
+  const [authPassword, setAuthPassword] = useState("");
+  const [authConfirmPassword, setAuthConfirmPassword] = useState("");
+  const [authMessage, setAuthMessage] = useState("");
+  const [authError, setAuthError] = useState("");
+  const [isAuthSubmitting, setIsAuthSubmitting] = useState(false);
+  const [currentUser, setCurrentUser] = useState<AuthUser | null>(null);
 
   useEffect(() => {
     if (!mapRef.current || mapInstanceRef.current) {
@@ -83,7 +105,76 @@ export default function LeafletMap() {
   function openAuth(mode: AuthMode) {
     setIsProfileMenuOpen(false);
     setAuthMode(mode);
+    setAuthMessage("");
+    setAuthError("");
     setIsAuthOpen(true);
+  }
+
+  async function handleAuthSubmit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setAuthMessage("");
+    setAuthError("");
+
+    if (authMode === "signup" && authPassword !== authConfirmPassword) {
+      setAuthError("Passwords do not match.");
+      return;
+    }
+
+    setIsAuthSubmitting(true);
+
+    try {
+      const response = await fetch(`${apiBaseUrl}/api/v1/auth/${authMode}`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(
+          authMode === "signup"
+            ? {
+                name: authName,
+                email: authEmail,
+                password: authPassword,
+              }
+            : {
+                email: authEmail,
+                password: authPassword,
+              },
+        ),
+      });
+
+      const payload = (await response.json()) as
+        | AuthResponse
+        | { message?: string | string[] };
+
+      if (!response.ok) {
+        const message = "message" in payload ? payload.message : undefined;
+        throw new Error(
+          Array.isArray(message)
+            ? message.join(" ")
+            : message || "Authentication failed.",
+        );
+      }
+
+      const authPayload = payload as AuthResponse;
+      localStorage.setItem("parkshare_access_token", authPayload.accessToken);
+      setCurrentUser(authPayload.user);
+      setAuthPassword("");
+      setAuthConfirmPassword("");
+      setAuthMessage(
+        authMode === "signup"
+          ? "Account created. You are signed in."
+          : "You are signed in.",
+      );
+      setIsAuthOpen(false);
+    } catch (error) {
+      setAuthError(
+        error instanceof Error
+          ? error.message
+          : "Could not reach the authentication server.",
+      );
+    } finally {
+      setIsAuthSubmitting(false);
+    }
   }
 
   return (
@@ -112,12 +203,18 @@ export default function LeafletMap() {
       </button>
       {isProfileMenuOpen ? (
         <div className="map-profile-menu">
-          <button type="button" onClick={() => openAuth("signup")}>
-            Sign up
-          </button>
-          <button type="button" onClick={() => openAuth("login")}>
-            Log in
-          </button>
+          {currentUser ? (
+            <button type="button">Signed in as {currentUser.name}</button>
+          ) : (
+            <>
+              <button type="button" onClick={() => openAuth("signup")}>
+                Sign up
+              </button>
+              <button type="button" onClick={() => openAuth("login")}>
+                Log in
+              </button>
+            </>
+          )}
         </div>
       ) : null}
       {isAuthOpen ? (
@@ -140,14 +237,22 @@ export default function LeafletMap() {
               <button
                 type="button"
                 aria-pressed={authMode === "login"}
-                onClick={() => setAuthMode("login")}
+                onClick={() => {
+                  setAuthMode("login");
+                  setAuthError("");
+                  setAuthMessage("");
+                }}
               >
                 Log in
               </button>
               <button
                 type="button"
                 aria-pressed={authMode === "signup"}
-                onClick={() => setAuthMode("signup")}
+                onClick={() => {
+                  setAuthMode("signup");
+                  setAuthError("");
+                  setAuthMessage("");
+                }}
               >
                 Sign up
               </button>
@@ -162,14 +267,17 @@ export default function LeafletMap() {
                   : "Join ParkShare to book spots or list your own parking space."}
               </p>
             </div>
-            <form className="auth-form">
+            <form className="auth-form" onSubmit={handleAuthSubmit}>
               {authMode === "signup" ? (
                 <label>
-                  <span>Username</span>
+                  <span>Name</span>
                   <input
                     type="text"
-                    autoComplete="username"
-                    placeholder="parkshare_user"
+                    autoComplete="name"
+                    placeholder="Your name"
+                    value={authName}
+                    onChange={(event) => setAuthName(event.target.value)}
+                    required
                   />
                 </label>
               ) : null}
@@ -179,6 +287,9 @@ export default function LeafletMap() {
                   type="email"
                   autoComplete="email"
                   placeholder="you@example.com"
+                  value={authEmail}
+                  onChange={(event) => setAuthEmail(event.target.value)}
+                  required
                 />
               </label>
               <label>
@@ -189,6 +300,10 @@ export default function LeafletMap() {
                     authMode === "login" ? "current-password" : "new-password"
                   }
                   placeholder="Your password"
+                  value={authPassword}
+                  onChange={(event) => setAuthPassword(event.target.value)}
+                  minLength={12}
+                  required
                 />
               </label>
               {authMode === "signup" ? (
@@ -198,11 +313,25 @@ export default function LeafletMap() {
                     type="password"
                     autoComplete="new-password"
                     placeholder="Repeat your password"
+                    value={authConfirmPassword}
+                    onChange={(event) =>
+                      setAuthConfirmPassword(event.target.value)
+                    }
+                    minLength={12}
+                    required
                   />
                 </label>
               ) : null}
-              <button type="button">
-                {authMode === "login" ? "Log in" : "Create account"}
+              {authError ? <p className="auth-error">{authError}</p> : null}
+              {authMessage ? (
+                <p className="auth-success">{authMessage}</p>
+              ) : null}
+              <button type="submit" disabled={isAuthSubmitting}>
+                {isAuthSubmitting
+                  ? "Please wait..."
+                  : authMode === "login"
+                    ? "Log in"
+                    : "Create account"}
               </button>
             </form>
             <p className="auth-switch-copy">
@@ -211,9 +340,11 @@ export default function LeafletMap() {
                 : "Already have an account?"}{" "}
               <button
                 type="button"
-                onClick={() =>
-                  setAuthMode(authMode === "login" ? "signup" : "login")
-                }
+                onClick={() => {
+                  setAuthMode(authMode === "login" ? "signup" : "login");
+                  setAuthError("");
+                  setAuthMessage("");
+                }}
               >
                 {authMode === "login" ? "Sign up" : "Log in"}
               </button>
