@@ -15,7 +15,7 @@ import { PasswordHasherService } from './password-hasher.service';
 import { TokenService } from './token.service';
 import { UsersService } from '../users/users.service';
 
-const MIN_PASSWORD_LENGTH = 12;
+const MIN_PASSWORD_LENGTH = 6;
 
 @Injectable()
 export class AuthService {

@@ -78,6 +78,31 @@ describe('AuthService', () => {
     });
   });
 
+  it('allows a simple six-character password during registration', async () => {
+    usersService.findByEmail.mockResolvedValue(null);
+    passwordHasher.hash.mockResolvedValue('scrypt$hash');
+    usersService.create.mockResolvedValue({
+      ...publicUser,
+      passwordHash: 'scrypt$hash',
+      createdAt: new Date(publicUser.createdAt),
+      updatedAt: new Date(publicUser.updatedAt),
+    });
+    usersService.toPublicUser.mockReturnValue(publicUser);
+    tokenService.signForUser.mockResolvedValue('signed-token');
+
+    await expect(
+      authService.register({
+        email: 'driver@example.com',
+        name: 'Driver One',
+        password: 'samdar',
+        role: UserRole.DRIVER,
+      }),
+    ).resolves.toEqual({
+      user: publicUser,
+      accessToken: 'signed-token',
+    });
+  });
+
   it('rejects registration when the email already exists', async () => {
     usersService.findByEmail.mockResolvedValue({
       ...publicUser,

@@ -302,7 +302,7 @@ export default function LeafletMap() {
                   placeholder="Your password"
                   value={authPassword}
                   onChange={(event) => setAuthPassword(event.target.value)}
-                  minLength={12}
+                  minLength={6}
                   required
                 />
               </label>
@@ -317,7 +317,7 @@ export default function LeafletMap() {
                     onChange={(event) =>
                       setAuthConfirmPassword(event.target.value)
                     }
-                    minLength={12}
+                    minLength={6}
                     required
                   />
                 </label>
