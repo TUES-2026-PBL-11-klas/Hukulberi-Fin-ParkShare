@@ -4,6 +4,7 @@ import {
   Controller,
   Post,
   Req,
+  UnauthorizedException,
   UseGuards,
 } from '@nestjs/common';
 import type {
@@ -31,7 +32,9 @@ export class PaymentsController {
     @Body() body: CreateCheckoutSessionRequestDto,
   ): Promise<CreateCheckoutSessionResponseDto> {
     if (!request.user) {
-      throw new Error('Authenticated request is missing user context');
+      throw new UnauthorizedException(
+        'Authenticated request is missing user context',
+      );
     }
 
     return this.paymentsService.createCheckoutSession({

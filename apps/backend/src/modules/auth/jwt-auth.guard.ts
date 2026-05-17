@@ -4,6 +4,7 @@ import {
   Injectable,
   UnauthorizedException,
 } from '@nestjs/common';
+import { UserStatus as PrismaUserStatus } from '@prisma/client';
 import { Request } from 'express';
 import { TokenService } from './token.service';
 import { UsersService } from '../users/users.service';
@@ -25,8 +26,8 @@ export class JwtAuthGuard implements CanActivate {
     const payload = await this.tokenService.verifyAccessToken(token);
     const user = await this.usersService.findById(payload.sub);
 
-    if (!user) {
-      throw new UnauthorizedException('User no longer exists');
+    if (!user || user.status !== PrismaUserStatus.ACTIVE) {
+      throw new UnauthorizedException('User account is not active');
     }
 
     request.user = this.usersService.toPublicUser(user);

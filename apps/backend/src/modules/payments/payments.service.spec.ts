@@ -1,4 +1,8 @@
-import { PaymentProviderType, PaymentStatus } from '@prisma/client';
+import {
+  PaymentProviderType,
+  PaymentStatus,
+  WebhookProcessingStatus,
+} from '@prisma/client';
 import { PaymentsService } from './payments.service';
 import { StripeClientService } from './stripe-client.service';
 import { PrismaService } from '../prisma/prisma.service';
@@ -152,6 +156,7 @@ describe('PaymentsService', () => {
     });
     prisma.paymentWebhookEvent.findUnique.mockResolvedValue({
       providerEventId: 'evt_test_123',
+      processingStatus: WebhookProcessingStatus.PROCESSED,
     });
 
     await expect(

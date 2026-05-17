@@ -55,18 +55,30 @@ export class PaymentsService {
       },
     });
 
-    const session = await this.stripeClient.createCheckoutSession({
-      amount,
-      cancelUrl,
-      currency,
-      metadata: {
-        paymentId: payment.id,
-        userId: input.userId,
-        ...(input.bookingId ? { bookingId: input.bookingId } : {}),
-      },
-      name,
-      successUrl,
-    });
+    let session: Awaited<
+      ReturnType<StripeClientService['createCheckoutSession']>
+    >;
+
+    try {
+      session = await this.stripeClient.createCheckoutSession({
+        amount,
+        cancelUrl,
+        currency,
+        metadata: {
+          paymentId: payment.id,
+          userId: input.userId,
+          ...(input.bookingId ? { bookingId: input.bookingId } : {}),
+        },
+        name,
+        successUrl,
+      });
+    } catch (error) {
+      await this.prisma.payment.update({
+        where: { id: payment.id },
+        data: { status: PaymentStatus.FAILED },
+      });
+      throw error;
+    }
 
     if (!session.url) {
       throw new InternalServerErrorException(
@@ -96,12 +108,19 @@ export class PaymentsService {
     rawBody: Buffer,
     signature: string,
   ): Promise<StripeWebhookResponseDto> {
-    const event = this.stripeClient.constructWebhookEvent(rawBody, signature);
+    let event: StripeWebhookEvent;
+
+    try {
+      event = this.stripeClient.constructWebhookEvent(rawBody, signature);
+    } catch {
+      throw new BadRequestException('Invalid Stripe webhook signature');
+    }
+
     const existingEvent = await this.prisma.paymentWebhookEvent.findUnique({
       where: { providerEventId: event.id },
     });
 
-    if (existingEvent) {
+    if (existingEvent?.processingStatus === WebhookProcessingStatus.PROCESSED) {
       return {
         duplicate: true,
         eventId: event.id,
@@ -111,19 +130,45 @@ export class PaymentsService {
 
     const paymentId = this.extractPaymentId(event);
 
-    await this.prisma.paymentWebhookEvent.create({
-      data: {
-        eventType: event.type,
-        paymentId,
-        processingStatus: WebhookProcessingStatus.PROCESSED,
-        provider: PaymentProviderType.STRIPE,
-        providerEventId: event.id,
-        processedAt: new Date(),
-        rawJson: this.toJson(event),
-      },
-    });
+    const webhookEvent = existingEvent
+      ? await this.prisma.paymentWebhookEvent.update({
+          where: { providerEventId: event.id },
+          data: {
+            paymentId,
+            processingStatus: WebhookProcessingStatus.PENDING,
+            rawJson: this.toJson(event),
+          },
+        })
+      : await this.prisma.paymentWebhookEvent.create({
+          data: {
+            eventType: event.type,
+            paymentId,
+            processingStatus: WebhookProcessingStatus.PENDING,
+            provider: PaymentProviderType.STRIPE,
+            providerEventId: event.id,
+            rawJson: this.toJson(event),
+          },
+        });
 
-    await this.applyWebhookToPayment(event);
+    try {
+      await this.applyWebhookToPayment(event);
+      await this.prisma.paymentWebhookEvent.update({
+        where: { id: webhookEvent.id },
+        data: {
+          processingStatus: WebhookProcessingStatus.PROCESSED,
+          processedAt: new Date(),
+        },
+      });
+    } catch (error) {
+      await this.prisma.paymentWebhookEvent.update({
+        where: { id: webhookEvent.id },
+        data: {
+          processingStatus: WebhookProcessingStatus.FAILED,
+          processedAt: null,
+        },
+      });
+      throw error;
+    }
 
     return {
       duplicate: false,

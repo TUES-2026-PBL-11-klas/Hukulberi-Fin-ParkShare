@@ -1,4 +1,12 @@
-import { Body, Controller, Get, Post, Req, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Post,
+  Req,
+  UnauthorizedException,
+  UseGuards,
+} from '@nestjs/common';
 import type {
   AuthResponseDto,
   LoginRequestDto,
@@ -27,7 +35,9 @@ export class AuthController {
   @UseGuards(JwtAuthGuard)
   me(@Req() request: AuthenticatedRequest): PublicUserDto {
     if (!request.user) {
-      throw new Error('Authenticated request is missing user context');
+      throw new UnauthorizedException(
+        'Authenticated request is missing user context',
+      );
     }
 
     return request.user;
