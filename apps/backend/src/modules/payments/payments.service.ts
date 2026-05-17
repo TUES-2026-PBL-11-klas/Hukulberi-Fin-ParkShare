@@ -21,7 +21,7 @@ import {
 } from './stripe-client.service';
 import { PrismaService } from '../prisma/prisma.service';
 
-const DEFAULT_CURRENCY = 'bgn';
+const DEFAULT_CURRENCY = 'eur';
 const DEFAULT_PAYMENT_NAME = 'ParkShare parking reservation';
 
 interface CreateCheckoutSessionInput extends CreateCheckoutSessionRequestDto {
