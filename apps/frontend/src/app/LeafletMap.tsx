@@ -100,6 +100,36 @@ export default function LeafletMap() {
     ];
   }, [theme]);
 
+  useEffect(() => {
+    const accessToken = localStorage.getItem("parkshare_access_token");
+
+    if (!accessToken) {
+      return;
+    }
+
+    async function loadCurrentUser() {
+      try {
+        const response = await fetch(`${apiBaseUrl}/api/v1/auth/me`, {
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+          },
+        });
+
+        if (!response.ok) {
+          throw new Error("Stored session is no longer valid.");
+        }
+
+        const user = (await response.json()) as AuthUser;
+        setCurrentUser(user);
+      } catch {
+        localStorage.removeItem("parkshare_access_token");
+        setCurrentUser(null);
+      }
+    }
+
+    void loadCurrentUser();
+  }, []);
+
   const nextTheme = theme === "dark" ? "light" : "dark";
 
   function openAuth(mode: AuthMode) {
@@ -177,6 +207,17 @@ export default function LeafletMap() {
     }
   }
 
+  function handleSignOut() {
+    localStorage.removeItem("parkshare_access_token");
+    setCurrentUser(null);
+    setIsProfileMenuOpen(false);
+    setIsAuthOpen(false);
+    setAuthPassword("");
+    setAuthConfirmPassword("");
+    setAuthMessage("");
+    setAuthError("");
+  }
+
   return (
     <div className="relative h-screen w-screen" data-map-theme={theme}>
       <div ref={mapRef} className="h-full w-full" />
@@ -204,7 +245,12 @@ export default function LeafletMap() {
       {isProfileMenuOpen ? (
         <div className="map-profile-menu">
           {currentUser ? (
-            <button type="button">Signed in as {currentUser.name}</button>
+            <>
+              <button type="button">Signed in as {currentUser.name}</button>
+              <button type="button" onClick={handleSignOut}>
+                Sign out
+              </button>
+            </>
           ) : (
             <>
               <button type="button" onClick={() => openAuth("signup")}>
