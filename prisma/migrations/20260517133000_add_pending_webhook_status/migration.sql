@@ -1,1 +1,1 @@
-ALTER TYPE "public"."webhook_processing_status" ADD VALUE IF NOT EXISTS 'PENDING';
+ALTER TYPE "WebhookProcessingStatus" ADD VALUE IF NOT EXISTS 'PENDING';
