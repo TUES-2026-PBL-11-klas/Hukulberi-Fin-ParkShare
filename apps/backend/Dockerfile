@@ -1,5 +1,6 @@
 FROM node:22-alpine AS builder
 WORKDIR /workspace
+ENV HUSKY=0
 ENV DATABASE_URL=postgresql://parkshare:parkshare@localhost:5432/parkshare_build
 RUN apk add --no-cache openssl
 
