@@ -16,6 +16,12 @@ type AuthResponse = {
   accessToken: string;
 };
 
+type PaymentMessage = {
+  tone: "success" | "warning";
+  title: string;
+  copy: string;
+};
+
 const apiBaseUrl =
   process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:3001";
 
@@ -31,6 +37,33 @@ const tileLayers = {
       "https://{s}.basemaps.cartocdn.com/dark_only_labels/{z}/{x}/{y}{r}.png",
   },
 } satisfies Record<MapTheme, { base: string; labels: string }>;
+
+function readInitialPaymentMessage(): PaymentMessage | null {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  const params = new URLSearchParams(window.location.search);
+  const paymentStatus = params.get("payment");
+
+  if (paymentStatus === "success") {
+    return {
+      tone: "success",
+      title: "Payment completed",
+      copy: "Stripe accepted the test payment. The webhook will confirm it on the backend.",
+    };
+  }
+
+  if (paymentStatus === "cancel") {
+    return {
+      tone: "warning",
+      title: "Checkout canceled",
+      copy: "No payment was taken. You can start another Stripe test payment when ready.",
+    };
+  }
+
+  return null;
+}
 
 export default function LeafletMap() {
   const mapRef = useRef<HTMLDivElement | null>(null);
@@ -49,11 +82,9 @@ export default function LeafletMap() {
   const [authError, setAuthError] = useState("");
   const [isAuthSubmitting, setIsAuthSubmitting] = useState(false);
   const [currentUser, setCurrentUser] = useState<AuthUser | null>(null);
-  const [paymentMessage, setPaymentMessage] = useState<{
-    tone: "success" | "warning";
-    title: string;
-    copy: string;
-  } | null>(null);
+  const [paymentMessage, setPaymentMessage] = useState<PaymentMessage | null>(
+    readInitialPaymentMessage,
+  );
 
   useEffect(() => {
     if (!mapRef.current || mapInstanceRef.current) {
@@ -137,23 +168,9 @@ export default function LeafletMap() {
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    const paymentStatus = params.get("payment");
 
-    if (paymentStatus === "success") {
-      setPaymentMessage({
-        tone: "success",
-        title: "Payment completed",
-        copy: "Stripe accepted the test payment. The webhook will confirm it on the backend.",
-      });
-      window.history.replaceState(null, "", window.location.pathname);
-    }
-
-    if (paymentStatus === "cancel") {
-      setPaymentMessage({
-        tone: "warning",
-        title: "Checkout canceled",
-        copy: "No payment was taken. You can start another Stripe test payment when ready.",
-      });
+    if (params.has("payment")) {
+      params.delete("payment");
       window.history.replaceState(null, "", window.location.pathname);
     }
   }, []);
