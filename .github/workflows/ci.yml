@@ -74,3 +74,33 @@ jobs:
           tags: parkshare-frontend:ci
           cache-from: type=gha,scope=frontend-ci
           cache-to: type=gha,mode=max,scope=frontend-ci
+
+  notify:
+    name: Notify Discord
+    runs-on: ubuntu-latest
+    needs:
+      - quality
+      - docker
+    if: always()
+
+    steps:
+      - name: Send CI result
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          QUALITY_RESULT: ${{ needs.quality.result }}
+          DOCKER_RESULT: ${{ needs.docker.result }}
+        run: |
+          if [ -z "$DISCORD_WEBHOOK_URL" ]; then
+            echo "DISCORD_WEBHOOK_URL is not configured; skipping notification."
+            exit 0
+          fi
+
+          if [ "$QUALITY_RESULT" = "success" ] && [ "$DOCKER_RESULT" = "success" ]; then
+            STATUS="passed"
+          else
+            STATUS="failed"
+          fi
+
+          curl -H "Content-Type: application/json" \
+            -d "{\"content\":\"ParkShare CI ${STATUS} for ${GITHUB_REF_NAME} (${GITHUB_SHA::7}). Quality: ${QUALITY_RESULT}. Docker: ${DOCKER_RESULT}. ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}\"}" \
+            "$DISCORD_WEBHOOK_URL"

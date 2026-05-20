@@ -1,10 +1,11 @@
 name: CD
 
 on:
-  push:
-    branches:
-      - main
-      - dev
+  workflow_run:
+    workflows:
+      - CI
+    types:
+      - completed
   workflow_dispatch:
 
 permissions:
@@ -14,6 +15,10 @@ jobs:
   docker:
     name: Build and publish Docker images
     runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    outputs:
+      source_branch: ${{ steps.prepare.outputs.source_branch }}
+      source_sha_short: ${{ steps.prepare.outputs.source_sha_short }}
     env:
       DATABASE_URL: ${{ secrets.DATABASE_URL }}
       JWT_SECRET: ${{ secrets.JWT_SECRET }}
@@ -24,6 +29,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
 
       - name: Check DockerHub secrets
         run: |
@@ -36,11 +43,43 @@ jobs:
           DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - name: Prepare image names
+        id: prepare
         run: |
+          SOURCE_BRANCH="${WORKFLOW_HEAD_BRANCH:-$GITHUB_REF_NAME}"
+          SOURCE_SHA="${WORKFLOW_HEAD_SHA:-$GITHUB_SHA}"
+          BRANCH_TAG="$(echo "$SOURCE_BRANCH" | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9_.-]+/-/g' | sed -E 's/^-+|-+$//g')"
+          SHORT_SHA="${SOURCE_SHA::7}"
+
           echo "BACKEND_IMAGE=${DOCKERHUB_USERNAME}/parkshare-backend" >> "$GITHUB_ENV"
           echo "FRONTEND_IMAGE=${DOCKERHUB_USERNAME}/parkshare-frontend" >> "$GITHUB_ENV"
+          echo "SOURCE_BRANCH=${SOURCE_BRANCH}" >> "$GITHUB_ENV"
+          echo "SOURCE_SHA_SHORT=${SHORT_SHA}" >> "$GITHUB_ENV"
+          echo "source_branch=${SOURCE_BRANCH}" >> "$GITHUB_OUTPUT"
+          echo "source_sha_short=${SHORT_SHA}" >> "$GITHUB_OUTPUT"
+
+          {
+            echo "BACKEND_TAGS<<EOF"
+            echo "${DOCKERHUB_USERNAME}/parkshare-backend:${BRANCH_TAG}"
+            echo "${DOCKERHUB_USERNAME}/parkshare-backend:sha-${SHORT_SHA}"
+            if [ "$SOURCE_BRANCH" = "main" ]; then
+              echo "${DOCKERHUB_USERNAME}/parkshare-backend:latest"
+            fi
+            echo "EOF"
+          } >> "$GITHUB_ENV"
+
+          {
+            echo "FRONTEND_TAGS<<EOF"
+            echo "${DOCKERHUB_USERNAME}/parkshare-frontend:${BRANCH_TAG}"
+            echo "${DOCKERHUB_USERNAME}/parkshare-frontend:sha-${SHORT_SHA}"
+            if [ "$SOURCE_BRANCH" = "main" ]; then
+              echo "${DOCKERHUB_USERNAME}/parkshare-frontend:latest"
+            fi
+            echo "EOF"
+          } >> "$GITHUB_ENV"
         env:
           DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          WORKFLOW_HEAD_BRANCH: ${{ github.event.workflow_run.head_branch }}
+          WORKFLOW_HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -51,34 +90,13 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Extract backend metadata
-        id: backend-meta
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ env.BACKEND_IMAGE }}
-          tags: |
-            type=ref,event=branch
-            type=sha,prefix=sha-
-            type=raw,value=latest,enable={{is_default_branch}}
-
-      - name: Extract frontend metadata
-        id: frontend-meta
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ env.FRONTEND_IMAGE }}
-          tags: |
-            type=ref,event=branch
-            type=sha,prefix=sha-
-            type=raw,value=latest,enable={{is_default_branch}}
-
       - name: Build and push backend image
         uses: docker/build-push-action@v6
         with:
           context: .
           file: apps/backend/Dockerfile
           push: true
-          tags: ${{ steps.backend-meta.outputs.tags }}
-          labels: ${{ steps.backend-meta.outputs.labels }}
+          tags: ${{ env.BACKEND_TAGS }}
           cache-from: type=gha,scope=backend
           cache-to: type=gha,mode=max,scope=backend
 
@@ -88,33 +106,35 @@ jobs:
           context: .
           file: apps/frontend/Dockerfile
           push: true
-          tags: ${{ steps.frontend-meta.outputs.tags }}
-          labels: ${{ steps.frontend-meta.outputs.labels }}
+          tags: ${{ env.FRONTEND_TAGS }}
           cache-from: type=gha,scope=frontend
           cache-to: type=gha,mode=max,scope=frontend
 
-      - name: Notify Discord success
-        if: success()
-        env:
-          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
-        run: |
-          if [ -z "$DISCORD_WEBHOOK_URL" ]; then
-            echo "DISCORD_WEBHOOK_URL is not configured; skipping notification."
-            exit 0
-          fi
-          curl -H "Content-Type: application/json" \
-            -d "{\"content\":\"ParkShare CD succeeded for ${GITHUB_REF_NAME} (${GITHUB_SHA::7}). Backend: ${BACKEND_IMAGE}. Frontend: ${FRONTEND_IMAGE}.\"}" \
-            "$DISCORD_WEBHOOK_URL"
+  notify:
+    name: Notify Discord
+    runs-on: ubuntu-latest
+    needs: docker
+    if: always() && needs.docker.result != 'skipped'
 
-      - name: Notify Discord failure
-        if: failure()
+    steps:
+      - name: Send CD result
         env:
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          DOCKER_RESULT: ${{ needs.docker.result }}
+          SOURCE_BRANCH: ${{ needs.docker.outputs.source_branch }}
+          SOURCE_SHA_SHORT: ${{ needs.docker.outputs.source_sha_short }}
         run: |
           if [ -z "$DISCORD_WEBHOOK_URL" ]; then
             echo "DISCORD_WEBHOOK_URL is not configured; skipping notification."
             exit 0
           fi
+
+          if [ "$DOCKER_RESULT" = "success" ]; then
+            STATUS="passed"
+          else
+            STATUS="failed"
+          fi
+
           curl -H "Content-Type: application/json" \
-            -d "{\"content\":\"ParkShare CD failed for ${GITHUB_REF_NAME} (${GITHUB_SHA::7}). Check ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}.\"}" \
+            -d "{\"content\":\"ParkShare CD ${STATUS} for ${SOURCE_BRANCH:-$GITHUB_REF_NAME} (${SOURCE_SHA_SHORT:-${GITHUB_SHA::7}}). Docker publish: ${DOCKER_RESULT}. ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}\"}" \
             "$DISCORD_WEBHOOK_URL"
