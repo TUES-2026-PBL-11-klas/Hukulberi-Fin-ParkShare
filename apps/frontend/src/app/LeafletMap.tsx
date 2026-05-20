@@ -49,6 +49,11 @@ export default function LeafletMap() {
   const [authError, setAuthError] = useState("");
   const [isAuthSubmitting, setIsAuthSubmitting] = useState(false);
   const [currentUser, setCurrentUser] = useState<AuthUser | null>(null);
+  const [paymentMessage, setPaymentMessage] = useState<{
+    tone: "success" | "warning";
+    title: string;
+    copy: string;
+  } | null>(null);
 
   useEffect(() => {
     if (!mapRef.current || mapInstanceRef.current) {
@@ -128,6 +133,29 @@ export default function LeafletMap() {
     }
 
     void loadCurrentUser();
+  }, []);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const paymentStatus = params.get("payment");
+
+    if (paymentStatus === "success") {
+      setPaymentMessage({
+        tone: "success",
+        title: "Payment completed",
+        copy: "Stripe accepted the test payment. The webhook will confirm it on the backend.",
+      });
+      window.history.replaceState(null, "", window.location.pathname);
+    }
+
+    if (paymentStatus === "cancel") {
+      setPaymentMessage({
+        tone: "warning",
+        title: "Checkout canceled",
+        copy: "No payment was taken. You can start another Stripe test payment when ready.",
+      });
+      window.history.replaceState(null, "", window.location.pathname);
+    }
   }, []);
 
   const nextTheme = theme === "dark" ? "light" : "dark";
@@ -221,6 +249,25 @@ export default function LeafletMap() {
   return (
     <div className="relative h-screen w-screen" data-map-theme={theme}>
       <div ref={mapRef} className="h-full w-full" />
+      {paymentMessage ? (
+        <section
+          className={`map-payment-toast map-payment-toast-${paymentMessage.tone}`}
+          role="status"
+          aria-live="polite"
+        >
+          <div>
+            <strong>{paymentMessage.title}</strong>
+            <span>{paymentMessage.copy}</span>
+          </div>
+          <button
+            type="button"
+            aria-label="Dismiss payment message"
+            onClick={() => setPaymentMessage(null)}
+          >
+            x
+          </button>
+        </section>
+      ) : null}
       <button
         type="button"
         className="map-profile-button"
