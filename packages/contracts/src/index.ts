@@ -56,3 +56,32 @@ export interface StripeWebhookResponseDto {
   duplicate: boolean;
   eventId: string;
 }
+
+export enum BookingStatus {
+  HOLD = 'HOLD',
+  CONFIRMED = 'CONFIRMED',
+  CANCELED = 'CANCELED',
+  EXPIRED = 'EXPIRED',
+}
+
+export interface CreateBookingRequestDto {
+  spotId: string;
+  startAt: string;
+  endAt: string;
+  amount: number;
+  currency?: string;
+}
+
+export interface BookingDto {
+  id: string;
+  spotId: string;
+  driverUserId: string;
+  status: BookingStatus;
+  amount: number;
+  currency: string;
+  startAt: string;
+  endAt: string;
+  expiresAt: string;
+  createdAt: string;
+  updatedAt: string;
+}
