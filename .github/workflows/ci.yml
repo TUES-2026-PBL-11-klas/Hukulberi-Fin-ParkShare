@@ -102,6 +102,7 @@ jobs:
 
     steps:
       - name: Send CI result
+        continue-on-error: true
         env:
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
           QUALITY_RESULT: ${{ needs.quality.result }}
@@ -121,6 +122,7 @@ jobs:
           MESSAGE="ParkShare CI ${STATUS} for ${GITHUB_REF_NAME} (${GITHUB_SHA::7}). Quality: ${QUALITY_RESULT}. Docker: ${DOCKER_RESULT}. ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
           PAYLOAD="$(jq -n --arg content "$MESSAGE" '{content: $content}')"
 
-          curl -H "Content-Type: application/json" \
+          curl --fail --show-error --retry 3 --retry-delay 5 --max-time 10 \
+            -H "Content-Type: application/json" \
             -d "$PAYLOAD" \
             "$DISCORD_WEBHOOK_URL"
