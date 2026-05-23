@@ -22,9 +22,6 @@ jobs:
         github.event.workflow_run.event == 'push' &&
         contains(fromJSON('["main", "dev"]'), github.event.workflow_run.head_branch)
       )
-    outputs:
-      source_branch: ${{ steps.prepare.outputs.source_branch }}
-      source_sha_short: ${{ steps.prepare.outputs.source_sha_short }}
     env:
       DATABASE_URL: ${{ secrets.DATABASE_URL }}
       JWT_SECRET: ${{ secrets.JWT_SECRET }}
@@ -49,19 +46,21 @@ jobs:
           DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - name: Prepare image names
-        id: prepare
         run: |
           SOURCE_BRANCH="${WORKFLOW_HEAD_BRANCH:-$GITHUB_REF_NAME}"
           SOURCE_SHA="${WORKFLOW_HEAD_SHA:-$GITHUB_SHA}"
           BRANCH_TAG="$(echo "$SOURCE_BRANCH" | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9_.-]+/-/g' | sed -E 's/^-+|-+$//g')"
           SHORT_SHA="${SOURCE_SHA::7}"
+          BRANCH_TAG="${BRANCH_TAG:0:128}"
+
+          if [ -z "$BRANCH_TAG" ]; then
+            BRANCH_TAG="sha-${SHORT_SHA}"
+          fi
 
           echo "BACKEND_IMAGE=${DOCKERHUB_USERNAME}/parkshare-backend" >> "$GITHUB_ENV"
           echo "FRONTEND_IMAGE=${DOCKERHUB_USERNAME}/parkshare-frontend" >> "$GITHUB_ENV"
           echo "SOURCE_BRANCH=${SOURCE_BRANCH}" >> "$GITHUB_ENV"
           echo "SOURCE_SHA_SHORT=${SHORT_SHA}" >> "$GITHUB_ENV"
-          echo "source_branch=${SOURCE_BRANCH}" >> "$GITHUB_OUTPUT"
-          echo "source_sha_short=${SHORT_SHA}" >> "$GITHUB_OUTPUT"
 
           {
             echo "BACKEND_TAGS<<EOF"
@@ -127,13 +126,17 @@ jobs:
         env:
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
           DOCKER_RESULT: ${{ needs.docker.result }}
-          SOURCE_BRANCH: ${{ needs.docker.outputs.source_branch }}
-          SOURCE_SHA_SHORT: ${{ needs.docker.outputs.source_sha_short }}
+          WORKFLOW_HEAD_BRANCH: ${{ github.event.workflow_run.head_branch }}
+          WORKFLOW_HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
         run: |
           if [ -z "$DISCORD_WEBHOOK_URL" ]; then
             echo "DISCORD_WEBHOOK_URL is not configured; skipping notification."
             exit 0
           fi
+
+          SOURCE_BRANCH="${WORKFLOW_HEAD_BRANCH:-$GITHUB_REF_NAME}"
+          SOURCE_SHA="${WORKFLOW_HEAD_SHA:-$GITHUB_SHA}"
+          SOURCE_SHA_SHORT="${SOURCE_SHA::7}"
 
           if [ "$DOCKER_RESULT" = "success" ]; then
             STATUS="passed"
@@ -141,7 +144,7 @@ jobs:
             STATUS="failed"
           fi
 
-          MESSAGE="ParkShare CD ${STATUS} for ${SOURCE_BRANCH:-$GITHUB_REF_NAME} (${SOURCE_SHA_SHORT:-${GITHUB_SHA::7}}). Docker publish: ${DOCKER_RESULT}. ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          MESSAGE="ParkShare CD ${STATUS} for ${SOURCE_BRANCH} (${SOURCE_SHA_SHORT}). Docker publish: ${DOCKER_RESULT}. ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
           PAYLOAD="$(jq -n --arg content "$MESSAGE" '{content: $content}')"
 
           curl -H "Content-Type: application/json" \
