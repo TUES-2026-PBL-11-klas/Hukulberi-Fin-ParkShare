@@ -13,7 +13,6 @@ const checkoutDisplayAmount = new Intl.NumberFormat("en", {
   currencyDisplay: "code",
   style: "currency",
 }).format(checkoutAmount / 100);
-const checkoutName = "ParkShare test parking reservation";
 
 type CheckoutResponse = {
   checkoutUrl: string;
@@ -94,9 +93,6 @@ function CheckoutContent() {
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
-            amount: checkoutAmount,
-            currency: checkoutCurrency,
-            name: checkoutName,
             successUrl: successUrl.toString(),
             cancelUrl: cancelUrl.toString(),
           }),
