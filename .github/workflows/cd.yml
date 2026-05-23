@@ -15,7 +15,13 @@ jobs:
   docker:
     name: Build and publish Docker images
     runs-on: ubuntu-latest
-    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    if: >
+      github.event_name == 'workflow_dispatch' ||
+      (
+        github.event.workflow_run.conclusion == 'success' &&
+        github.event.workflow_run.event == 'push' &&
+        contains(fromJSON('["main", "dev"]'), github.event.workflow_run.head_branch)
+      )
     outputs:
       source_branch: ${{ steps.prepare.outputs.source_branch }}
       source_sha_short: ${{ steps.prepare.outputs.source_sha_short }}

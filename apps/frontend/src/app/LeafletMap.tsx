@@ -171,7 +171,11 @@ export default function LeafletMap() {
 
     if (params.has("payment")) {
       params.delete("payment");
-      window.history.replaceState(null, "", window.location.pathname);
+      const queryString = params.toString();
+      const replacementUrl = `${window.location.pathname}${
+        queryString ? `?${queryString}` : ""
+      }${window.location.hash}`;
+      window.history.replaceState(null, "", replacementUrl);
     }
   }, []);
 

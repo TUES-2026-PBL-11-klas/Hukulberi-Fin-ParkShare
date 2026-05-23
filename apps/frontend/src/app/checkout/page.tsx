@@ -65,11 +65,11 @@ function CheckoutContent() {
         throw new Error("Sign in before starting checkout.");
       }
 
-      const mapUrl = new URL("/", window.location.origin);
-      const successUrl = new URL(mapUrl);
-      successUrl.searchParams.set("payment", "success");
-      const cancelUrl = new URL(mapUrl);
-      cancelUrl.searchParams.set("payment", "cancel");
+      const checkoutUrl = new URL("/checkout", window.location.origin);
+      const successUrl = new URL(checkoutUrl);
+      successUrl.searchParams.set("status", "success");
+      const cancelUrl = new URL(checkoutUrl);
+      cancelUrl.searchParams.set("status", "cancel");
 
       const response = await fetch(
         `${apiBaseUrl}/api/v1/payments/checkout-sessions`,
