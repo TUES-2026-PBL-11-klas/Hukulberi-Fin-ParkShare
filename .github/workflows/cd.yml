@@ -141,6 +141,9 @@ jobs:
             STATUS="failed"
           fi
 
+          MESSAGE="ParkShare CD ${STATUS} for ${SOURCE_BRANCH:-$GITHUB_REF_NAME} (${SOURCE_SHA_SHORT:-${GITHUB_SHA::7}}). Docker publish: ${DOCKER_RESULT}. ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          PAYLOAD="$(jq -n --arg content "$MESSAGE" '{content: $content}')"
+
           curl -H "Content-Type: application/json" \
-            -d "{\"content\":\"ParkShare CD ${STATUS} for ${SOURCE_BRANCH:-$GITHUB_REF_NAME} (${SOURCE_SHA_SHORT:-${GITHUB_SHA::7}}). Docker publish: ${DOCKER_RESULT}. ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}\"}" \
+            -d "$PAYLOAD" \
             "$DISCORD_WEBHOOK_URL"

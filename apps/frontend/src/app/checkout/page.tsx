@@ -1,15 +1,18 @@
 "use client";
 
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
-import { Suspense, useMemo, useState } from "react";
+import { useState } from "react";
 
 const apiBaseUrl =
   process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:3001";
 
 const checkoutAmount = 1200;
 const checkoutCurrency = "eur";
-const checkoutDisplayAmount = "EUR 12.00";
+const checkoutDisplayAmount = new Intl.NumberFormat("en", {
+  currency: checkoutCurrency.toUpperCase(),
+  currencyDisplay: "code",
+  style: "currency",
+}).format(checkoutAmount / 100);
 const checkoutName = "ParkShare test parking reservation";
 
 type CheckoutResponse = {
@@ -20,39 +23,50 @@ type ApiErrorResponse = {
   message?: string | string[];
 };
 
-function readErrorMessage(payload: ApiErrorResponse): string {
-  if (Array.isArray(payload.message)) {
-    return payload.message.join(" ");
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function readErrorMessage(payload: unknown): string {
+  if (isRecord(payload)) {
+    const message = payload.message;
+
+    if (Array.isArray(message)) {
+      return message.join(" ");
+    }
+
+    if (typeof message === "string") {
+      return message;
+    }
   }
 
-  return payload.message ?? "Could not start Stripe Checkout.";
+  if (typeof payload === "string" && payload.trim()) {
+    return payload;
+  }
+
+  return "Could not start Stripe Checkout.";
+}
+
+async function readResponsePayload(
+  response: Response,
+): Promise<unknown> {
+  const contentType = response.headers.get("content-type") ?? "";
+
+  if (contentType.includes("application/json")) {
+    try {
+      return (await response.json()) as CheckoutResponse | ApiErrorResponse;
+    } catch {
+      return null;
+    }
+  }
+
+  const text = await response.text();
+  return text.trim() || null;
 }
 
 function CheckoutContent() {
-  const searchParams = useSearchParams();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState("");
-
-  const status = searchParams.get("status");
-  const statusMessage = useMemo(() => {
-    if (status === "success") {
-      return {
-        tone: "success",
-        title: "Payment completed",
-        copy: "Stripe accepted the test payment. The webhook will confirm the payment on the backend.",
-      };
-    }
-
-    if (status === "cancel") {
-      return {
-        tone: "warning",
-        title: "Checkout canceled",
-        copy: "No payment was taken. You can start a new Stripe test payment when ready.",
-      };
-    }
-
-    return null;
-  }, [status]);
 
   async function handleCheckout() {
     setError("");
@@ -65,11 +79,11 @@ function CheckoutContent() {
         throw new Error("Sign in before starting checkout.");
       }
 
-      const checkoutUrl = new URL("/checkout", window.location.origin);
-      const successUrl = new URL(checkoutUrl);
-      successUrl.searchParams.set("status", "success");
-      const cancelUrl = new URL(checkoutUrl);
-      cancelUrl.searchParams.set("status", "cancel");
+      const mapUrl = new URL("/", window.location.origin);
+      const successUrl = new URL(mapUrl);
+      successUrl.searchParams.set("payment", "success");
+      const cancelUrl = new URL(mapUrl);
+      cancelUrl.searchParams.set("payment", "cancel");
 
       const response = await fetch(
         `${apiBaseUrl}/api/v1/payments/checkout-sessions`,
@@ -89,21 +103,21 @@ function CheckoutContent() {
         },
       );
 
-      const payload = (await response.json()) as
-        | CheckoutResponse
-        | ApiErrorResponse;
+      const payload = await readResponsePayload(response);
 
       if (!response.ok) {
-        throw new Error(readErrorMessage(payload as ApiErrorResponse));
+        throw new Error(readErrorMessage(payload));
       }
 
-      const checkoutPayload = payload as CheckoutResponse;
-
-      if (!checkoutPayload.checkoutUrl) {
+      if (
+        !isRecord(payload) ||
+        typeof payload.checkoutUrl !== "string" ||
+        !payload.checkoutUrl
+      ) {
         throw new Error("Stripe did not return a checkout URL.");
       }
 
-      window.location.assign(checkoutPayload.checkoutUrl);
+      window.location.assign(payload.checkoutUrl);
     } catch (checkoutError) {
       setError(
         checkoutError instanceof Error
@@ -128,16 +142,6 @@ function CheckoutContent() {
             details are entered only on Stripe, never inside ParkShare.
           </p>
         </div>
-
-        {statusMessage ? (
-          <div
-            className={`checkout-status checkout-status-${statusMessage.tone}`}
-            role="status"
-          >
-            <strong>{statusMessage.title}</strong>
-            <span>{statusMessage.copy}</span>
-          </div>
-        ) : null}
 
         <div className="checkout-summary" aria-label="Reservation summary">
           <div>
@@ -186,18 +190,5 @@ function CheckoutContent() {
 }
 
 export default function CheckoutPage() {
-  return (
-    <Suspense
-      fallback={
-        <main className="checkout-shell">
-          <section className="checkout-panel" aria-label="Loading checkout">
-            <p className="checkout-eyebrow">Stripe test checkout</p>
-            <p className="checkout-test-card">Loading checkout...</p>
-          </section>
-        </main>
-      }
-    >
-      <CheckoutContent />
-    </Suspense>
-  );
+  return <CheckoutContent />;
 }
