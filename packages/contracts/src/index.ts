@@ -37,9 +37,6 @@ export interface AuthResponseDto {
 }
 
 export interface CreateCheckoutSessionRequestDto {
-  amount: number;
-  currency?: string;
-  name?: string;
   bookingId?: string;
   successUrl?: string;
   cancelUrl?: string;

@@ -16,6 +16,12 @@ type AuthResponse = {
   accessToken: string;
 };
 
+type PaymentMessage = {
+  tone: "success" | "warning";
+  title: string;
+  copy: string;
+};
+
 const apiBaseUrl =
   process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:3001";
 
@@ -31,6 +37,33 @@ const tileLayers = {
       "https://{s}.basemaps.cartocdn.com/dark_only_labels/{z}/{x}/{y}{r}.png",
   },
 } satisfies Record<MapTheme, { base: string; labels: string }>;
+
+function readInitialPaymentMessage(): PaymentMessage | null {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  const params = new URLSearchParams(window.location.search);
+  const paymentStatus = params.get("payment");
+
+  if (paymentStatus === "success") {
+    return {
+      tone: "success",
+      title: "Payment completed",
+      copy: "Stripe accepted the test payment. The webhook will confirm it on the backend.",
+    };
+  }
+
+  if (paymentStatus === "cancel") {
+    return {
+      tone: "warning",
+      title: "Checkout canceled",
+      copy: "No payment was taken. You can start another Stripe test payment when ready.",
+    };
+  }
+
+  return null;
+}
 
 export default function LeafletMap() {
   const mapRef = useRef<HTMLDivElement | null>(null);
@@ -49,6 +82,9 @@ export default function LeafletMap() {
   const [authError, setAuthError] = useState("");
   const [isAuthSubmitting, setIsAuthSubmitting] = useState(false);
   const [currentUser, setCurrentUser] = useState<AuthUser | null>(null);
+  const [paymentMessage, setPaymentMessage] = useState<PaymentMessage | null>(
+    readInitialPaymentMessage,
+  );
 
   useEffect(() => {
     if (!mapRef.current || mapInstanceRef.current) {
@@ -128,6 +164,19 @@ export default function LeafletMap() {
     }
 
     void loadCurrentUser();
+  }, []);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+
+    if (params.has("payment")) {
+      params.delete("payment");
+      const queryString = params.toString();
+      const replacementUrl = `${window.location.pathname}${
+        queryString ? `?${queryString}` : ""
+      }${window.location.hash}`;
+      window.history.replaceState(null, "", replacementUrl);
+    }
   }, []);
 
   const nextTheme = theme === "dark" ? "light" : "dark";
@@ -221,6 +270,25 @@ export default function LeafletMap() {
   return (
     <div className="relative h-screen w-screen" data-map-theme={theme}>
       <div ref={mapRef} className="h-full w-full" />
+      {paymentMessage ? (
+        <section
+          className={`map-payment-toast map-payment-toast-${paymentMessage.tone}`}
+          role="status"
+          aria-live="polite"
+        >
+          <div>
+            <strong>{paymentMessage.title}</strong>
+            <span>{paymentMessage.copy}</span>
+          </div>
+          <button
+            type="button"
+            aria-label="Dismiss payment message"
+            onClick={() => setPaymentMessage(null)}
+          >
+            x
+          </button>
+        </section>
+      ) : null}
       <button
         type="button"
         className="map-profile-button"

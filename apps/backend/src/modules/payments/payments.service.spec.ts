@@ -69,9 +69,6 @@ describe('PaymentsService', () => {
     await expect(
       service.createCheckoutSession({
         userId: 'user-1',
-        amount: 1200,
-        currency: 'EUR',
-        name: 'ParkShare test booking',
         successUrl: 'http://localhost:3000/payment/success',
         cancelUrl: 'http://localhost:3000/payment/cancel',
       }),
@@ -99,8 +96,63 @@ describe('PaymentsService', () => {
         paymentId: 'payment-1',
         userId: 'user-1',
       },
-      name: 'ParkShare test booking',
+      name: 'ParkShare test parking reservation',
       successUrl: 'http://localhost:3000/payment/success',
+    });
+  });
+
+  it('uses server-owned checkout details instead of client supplied pricing', async () => {
+    prisma.payment.create.mockResolvedValue({
+      id: 'payment-1',
+      amount: 1200,
+      currency: 'eur',
+    });
+    stripeClient.createCheckoutSession.mockResolvedValue({
+      id: 'cs_test_123',
+      url: 'https://checkout.stripe.com/c/pay/cs_test_123',
+      payment_intent: 'pi_test_123',
+    });
+    prisma.payment.update.mockResolvedValue({
+      id: 'payment-1',
+      providerCheckoutSessionId: 'cs_test_123',
+    });
+
+    const tamperedInput: Parameters<
+      PaymentsService['createCheckoutSession']
+    >[0] = {
+      userId: 'user-1',
+      successUrl: 'http://localhost:3000/?payment=success',
+      cancelUrl: 'http://localhost:3000/?payment=cancel',
+    };
+
+    Object.assign(tamperedInput, {
+      amount: 50,
+      currency: 'usd',
+      name: 'Attacker controlled item',
+    });
+
+    await service.createCheckoutSession(tamperedInput);
+
+    expect(prisma.payment.create).toHaveBeenCalledWith({
+      data: {
+        amount: 1200,
+        bookingId: undefined,
+        currency: 'eur',
+        driverUserId: 'user-1',
+        provider: PaymentProviderType.STRIPE,
+        status: PaymentStatus.CREATED,
+      },
+    });
+    expect(stripeClient.createCheckoutSession).toHaveBeenCalledWith({
+      amount: 1200,
+      cancelUrl: 'http://localhost:3000/?payment=cancel',
+      currency: 'eur',
+      metadata: {
+        paymentId: 'payment-1',
+        userId: 'user-1',
+      },
+      name: 'ParkShare test parking reservation',
+      successUrl: 'http://localhost:3000/?payment=success',
     });
   });
 
