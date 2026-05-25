@@ -35,6 +35,10 @@ Then apply the manifests:
 kubectl apply -f infra/observability/alertmanager/
 ```
 
+The example secret is intentionally named `discord-secret.example` so
+`kubectl apply -f infra/observability/alertmanager/` does not overwrite the
+real `alertmanager-discord-webhook` Secret.
+
 ## Testing
 
 After Alertmanager is running, port-forward it:
