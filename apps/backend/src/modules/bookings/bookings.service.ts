@@ -22,16 +22,18 @@ import { PrismaService } from '../prisma/prisma.service';
 const DEFAULT_CURRENCY = 'eur';
 const HOLD_TTL_MINUTES = 10;
 const EXPIRY_POLL_MS = 60_000;
+const ACTIVE_BOOKING_OVERLAP_CONSTRAINT = 'bookings_no_active_overlap';
 
 @Injectable()
 export class BookingsService implements OnModuleInit, OnModuleDestroy {
   private expiryTimer?: NodeJS.Timeout;
+  private expiryRun?: Promise<void>;
 
   constructor(private readonly prisma: PrismaService) {}
 
   onModuleInit() {
     this.expiryTimer = setInterval(() => {
-      void this.expireOverdueHolds();
+      void this.expireOverdueHoldsOnce();
     }, EXPIRY_POLL_MS);
   }
 
@@ -65,7 +67,7 @@ export class BookingsService implements OnModuleInit, OnModuleDestroy {
       throw new BadRequestException('Currency must be a 3-letter ISO code');
     }
 
-    await this.expireOverdueHolds();
+    await this.expireOverdueHoldsOnce();
 
     const overlap = await this.prisma.booking.findFirst({
       where: {
@@ -183,6 +185,16 @@ export class BookingsService implements OnModuleInit, OnModuleDestroy {
     });
   }
 
+  private expireOverdueHoldsOnce(): Promise<void> {
+    if (!this.expiryRun) {
+      this.expiryRun = this.expireOverdueHolds().finally(() => {
+        this.expiryRun = undefined;
+      });
+    }
+
+    return this.expiryRun;
+  }
+
   private toBookingDto(booking: Booking): BookingDto {
     return {
       id: booking.id,
@@ -210,9 +222,19 @@ export class BookingsService implements OnModuleInit, OnModuleDestroy {
   }
 
   private isActiveBookingOverlapError(error: unknown): boolean {
-    return (
-      error instanceof Prisma.PrismaClientKnownRequestError &&
-      error.code === 'P2004'
-    );
+    if (
+      !(error instanceof Prisma.PrismaClientKnownRequestError) ||
+      error.code !== 'P2004'
+    ) {
+      return false;
+    }
+
+    const constraint = error.meta?.constraint;
+
+    if (typeof constraint === 'string') {
+      return constraint === ACTIVE_BOOKING_OVERLAP_CONSTRAINT;
+    }
+
+    return error.message.includes(ACTIVE_BOOKING_OVERLAP_CONSTRAINT);
   }
 }

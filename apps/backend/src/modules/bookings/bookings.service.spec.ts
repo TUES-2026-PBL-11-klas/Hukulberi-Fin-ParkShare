@@ -82,6 +82,38 @@ describe('BookingsService', () => {
     });
   });
 
+  it('reuses an in-flight expiry run when holds are created concurrently', async () => {
+    let resolveExpiry: () => void = () => undefined;
+    const expiryPromise = new Promise<{ count: number }>((resolve) => {
+      resolveExpiry = () => resolve({ count: 0 });
+    });
+
+    prisma.booking.updateMany.mockReturnValue(expiryPromise);
+    prisma.booking.findFirst.mockResolvedValue(null);
+    prisma.booking.create.mockResolvedValue(baseBooking);
+
+    const firstHold = service.createHold({
+      amount: 1200,
+      driverUserId: baseBooking.driverUserId,
+      endAt: baseBooking.endAt.toISOString(),
+      spotId: baseBooking.spotId,
+      startAt: baseBooking.startAt.toISOString(),
+    });
+    const secondHold = service.createHold({
+      amount: 1200,
+      driverUserId: baseBooking.driverUserId,
+      endAt: baseBooking.endAt.toISOString(),
+      spotId: baseBooking.spotId,
+      startAt: baseBooking.startAt.toISOString(),
+    });
+
+    expect(prisma.booking.updateMany).toHaveBeenCalledTimes(1);
+
+    resolveExpiry();
+
+    await Promise.all([firstHold, secondHold]);
+  });
+
   it('rejects a hold that overlaps an active booking', async () => {
     prisma.booking.findFirst.mockResolvedValue(baseBooking);
 
@@ -104,6 +136,9 @@ describe('BookingsService', () => {
       new Prisma.PrismaClientKnownRequestError('exclusion constraint failed', {
         clientVersion: 'test',
         code: 'P2004',
+        meta: {
+          constraint: 'bookings_no_active_overlap',
+        },
       }),
     );
 
@@ -116,6 +151,32 @@ describe('BookingsService', () => {
         startAt: baseBooking.startAt.toISOString(),
       }),
     ).rejects.toBeInstanceOf(ConflictException);
+  });
+
+  it('does not map unrelated database constraint failures to conflict', async () => {
+    const error = new Prisma.PrismaClientKnownRequestError(
+      'other constraint failed',
+      {
+        clientVersion: 'test',
+        code: 'P2004',
+        meta: {
+          constraint: 'other_constraint',
+        },
+      },
+    );
+
+    prisma.booking.findFirst.mockResolvedValue(null);
+    prisma.booking.create.mockRejectedValue(error);
+
+    await expect(
+      service.createHold({
+        amount: 1200,
+        driverUserId: baseBooking.driverUserId,
+        endAt: baseBooking.endAt.toISOString(),
+        spotId: baseBooking.spotId,
+        startAt: baseBooking.startAt.toISOString(),
+      }),
+    ).rejects.toBe(error);
   });
 
   it('returns canceled bookings without writing again', async () => {

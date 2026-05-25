@@ -264,6 +264,7 @@ export class PaymentsService {
     await this.prisma.booking.updateMany({
       where: {
         driverUserId: userId,
+        expiresAt: { gt: new Date() },
         id: bookingId,
         status: BookingStatus.HOLD,
       },
