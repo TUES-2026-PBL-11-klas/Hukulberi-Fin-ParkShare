@@ -1,0 +1,56 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: alertmanager-discord
+  namespace: observability
+  labels:
+    app.kubernetes.io/name: alertmanager-discord
+    app.kubernetes.io/part-of: parkshare
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: alertmanager-discord
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: alertmanager-discord
+        app.kubernetes.io/part-of: parkshare
+    spec:
+      containers:
+        - name: alertmanager-discord
+          image: benjojo/alertmanager-discord@sha256:7d27cd8494b269fe592cf6a9d7f6bdf14ac628bba34c381dc43cf533eaa95158
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 9094
+          env:
+            - name: DISCORD_WEBHOOK
+              valueFrom:
+                secretKeyRef:
+                  name: alertmanager-discord-webhook
+                  key: url
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
+            limits:
+              cpu: 100m
+              memory: 128Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: alertmanager-discord
+  namespace: observability
+  labels:
+    app.kubernetes.io/name: alertmanager-discord
+    app.kubernetes.io/part-of: parkshare
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: alertmanager-discord
+  ports:
+    - name: http
+      port: 9094
+      targetPort: http
