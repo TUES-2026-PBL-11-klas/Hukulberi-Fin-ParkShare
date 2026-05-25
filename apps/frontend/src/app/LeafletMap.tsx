@@ -270,6 +270,61 @@ export default function LeafletMap() {
   return (
     <div className="relative h-screen w-screen" data-map-theme={theme}>
       <div ref={mapRef} className="h-full w-full" />
+      <nav className="map-primary-actions" aria-label="Map actions">
+        <button type="button" className="map-primary-action">
+          <svg
+            aria-hidden="true"
+            viewBox="0 0 24 24"
+            className="h-5 w-5"
+            fill="none"
+            stroke="currentColor"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth="2"
+          >
+            <circle cx="11" cy="11" r="7" />
+            <path d="m20 20-3.5-3.5" />
+          </svg>
+          <span>Search</span>
+        </button>
+        <button type="button" className="map-primary-action">
+          <svg
+            aria-hidden="true"
+            viewBox="0 0 24 24"
+            className="h-5 w-5"
+            fill="none"
+            stroke="currentColor"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth="2"
+          >
+            <path d="M8 2v4" />
+            <path d="M16 2v4" />
+            <rect x="4" y="5" width="16" height="16" rx="3" />
+            <path d="M4 10h16" />
+            <path d="M8 15h3" />
+            <path d="M14 15h2" />
+          </svg>
+          <span>Reservations</span>
+        </button>
+        <button type="button" className="map-primary-action">
+          <svg
+            aria-hidden="true"
+            viewBox="0 0 24 24"
+            className="h-5 w-5"
+            fill="none"
+            stroke="currentColor"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth="2"
+          >
+            <path d="M4 20V9.5L12 4l8 5.5V20" />
+            <path d="M8 20v-7h8v7" />
+            <path d="M8 16h8" />
+          </svg>
+          <span>List garage</span>
+        </button>
+      </nav>
       {paymentMessage ? (
         <section
           className={`map-payment-toast map-payment-toast-${paymentMessage.tone}`}
