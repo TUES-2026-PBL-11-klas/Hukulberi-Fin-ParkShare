@@ -22,7 +22,8 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 
 const DEFAULT_CURRENCY = 'eur';
-const DEFAULT_PAYMENT_NAME = 'ParkShare parking reservation';
+const DEFAULT_PAYMENT_NAME = 'ParkShare test parking reservation';
+const DEFAULT_PAYMENT_AMOUNT = 1200;
 
 interface CreateCheckoutSessionInput extends CreateCheckoutSessionRequestDto {
   userId: string;
@@ -38,9 +39,9 @@ export class PaymentsService {
   async createCheckoutSession(
     input: CreateCheckoutSessionInput,
   ): Promise<CreateCheckoutSessionResponseDto> {
-    const amount = this.normalizeAmount(input.amount);
-    const currency = this.normalizeCurrency(input.currency);
-    const name = input.name?.trim() || DEFAULT_PAYMENT_NAME;
+    const amount = DEFAULT_PAYMENT_AMOUNT;
+    const currency = DEFAULT_CURRENCY;
+    const name = DEFAULT_PAYMENT_NAME;
     const successUrl = this.defaultUrl(input.successUrl, 'payment/success');
     const cancelUrl = this.defaultUrl(input.cancelUrl, 'payment/cancel');
 
@@ -230,28 +231,6 @@ export class PaymentsService {
     }
 
     return undefined;
-  }
-
-  private normalizeAmount(amount: number): number {
-    if (!Number.isInteger(amount) || amount < 50) {
-      throw new BadRequestException(
-        'Amount must be an integer in minor currency units and at least 50',
-      );
-    }
-
-    return amount;
-  }
-
-  private normalizeCurrency(currency?: string): string {
-    const normalizedCurrency = (currency ?? DEFAULT_CURRENCY)
-      .trim()
-      .toLowerCase();
-
-    if (!/^[a-z]{3}$/.test(normalizedCurrency)) {
-      throw new BadRequestException('Currency must be a 3-letter ISO code');
-    }
-
-    return normalizedCurrency;
   }
 
   private defaultUrl(url: string | undefined, path: string): string {
