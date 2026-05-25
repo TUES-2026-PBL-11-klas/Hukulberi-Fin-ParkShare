@@ -3,6 +3,7 @@ import {
   ConflictException,
   ForbiddenException,
   Injectable,
+  Logger,
   NotFoundException,
   OnModuleDestroy,
   OnModuleInit,
@@ -26,6 +27,7 @@ const ACTIVE_BOOKING_OVERLAP_CONSTRAINT = 'bookings_no_active_overlap';
 
 @Injectable()
 export class BookingsService implements OnModuleInit, OnModuleDestroy {
+  private readonly logger = new Logger(BookingsService.name);
   private expiryTimer?: NodeJS.Timeout;
   private expiryRun?: Promise<void>;
 
@@ -33,7 +35,11 @@ export class BookingsService implements OnModuleInit, OnModuleDestroy {
 
   onModuleInit() {
     this.expiryTimer = setInterval(() => {
-      void this.expireOverdueHoldsOnce();
+      void this.expireOverdueHoldsOnce().catch((error: unknown) => {
+        this.logger.warn(
+          `Could not expire overdue booking holds: ${this.formatError(error)}`,
+        );
+      });
     }, EXPIRY_POLL_MS);
   }
 
@@ -236,5 +242,9 @@ export class BookingsService implements OnModuleInit, OnModuleDestroy {
     }
 
     return error.message.includes(ACTIVE_BOOKING_OVERLAP_CONSTRAINT);
+  }
+
+  private formatError(error: unknown): string {
+    return error instanceof Error ? error.message : String(error);
   }
 }
