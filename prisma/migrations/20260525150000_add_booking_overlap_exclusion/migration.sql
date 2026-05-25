@@ -1,3 +1,5 @@
+-- Requires the PostgreSQL btree_gist extension. Supabase allows this for the
+-- project owner role; restricted migration roles should pre-install it first.
 CREATE EXTENSION IF NOT EXISTS btree_gist;
 
 ALTER TABLE "bookings"

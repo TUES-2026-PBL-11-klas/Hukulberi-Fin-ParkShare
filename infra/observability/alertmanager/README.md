@@ -9,7 +9,7 @@ It provides:
 - An `alertmanager-discord` adapter that converts Alertmanager webhook payloads
   into Discord webhook messages
 - Kubernetes Deployment and Service manifests
-- A local secret template for the webhook URL
+- A non-colliding example secret template for the webhook URL
 
 Prometheus is not configured here yet. When Prometheus is added, point it at:
 
@@ -23,7 +23,7 @@ Do not commit the real Discord webhook URL. Create the secret locally before
 applying Alertmanager:
 
 ```powershell
-kubectl create namespace observability
+kubectl apply -f infra/observability/alertmanager/alertmanager.yaml
 kubectl create secret generic alertmanager-discord-webhook `
   --namespace observability `
   --from-literal=url="https://discord.com/api/webhooks/..."
@@ -35,9 +35,9 @@ Then apply the manifests:
 kubectl apply -f infra/observability/alertmanager/
 ```
 
-The example secret is intentionally named `discord-secret.example` so
-`kubectl apply -f infra/observability/alertmanager/` does not overwrite the
-real `alertmanager-discord-webhook` Secret.
+The example secret lives in `infra/observability/alertmanager/examples/` and
+uses the name `alertmanager-discord-webhook-example`, so it cannot overwrite
+the real `alertmanager-discord-webhook` Secret during the normal apply flow.
 
 ## Testing
 
