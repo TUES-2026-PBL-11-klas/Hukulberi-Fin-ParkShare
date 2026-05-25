@@ -30,6 +30,13 @@ enum PaymentStatus {
   CANCELED
 }
 
+enum BookingStatus {
+  HOLD
+  CONFIRMED
+  CANCELED
+  EXPIRED
+}
+
 enum WebhookProcessingStatus {
   PENDING
   PROCESSED
@@ -46,6 +53,7 @@ model User {
   createdAt    DateTime   @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt    DateTime   @updatedAt @map("updated_at") @db.Timestamptz(6)
   payments     Payment[]
+  bookings     Booking[]
 
   @@map("users")
 }
@@ -64,11 +72,35 @@ model Payment {
   updatedAt                 DateTime            @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   driverUser User                 @relation(fields: [driverUserId], references: [id], onDelete: Restrict)
+  booking    Booking?             @relation(fields: [bookingId], references: [id], onDelete: SetNull)
   webhooks   PaymentWebhookEvent[]
 
   @@index([driverUserId])
   @@index([bookingId])
   @@map("payments")
+}
+
+model Booking {
+  id           String        @id @default(uuid()) @db.Uuid
+  spotId       String        @map("spot_id") @db.Uuid
+  driverUserId String        @map("driver_user_id") @db.Uuid
+  status       BookingStatus @default(HOLD)
+  amount       Int
+  currency     String        @db.Char(3)
+  startAt      DateTime      @map("start_at") @db.Timestamptz(6)
+  endAt        DateTime      @map("end_at") @db.Timestamptz(6)
+  expiresAt    DateTime      @map("expires_at") @db.Timestamptz(6)
+  createdAt    DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime      @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  driverUser User      @relation(fields: [driverUserId], references: [id], onDelete: Restrict)
+  payments   Payment[]
+
+  @@index([driverUserId])
+  @@index([spotId])
+  @@index([status])
+  @@index([startAt, endAt])
+  @@map("bookings")
 }
 
 model PaymentWebhookEvent {

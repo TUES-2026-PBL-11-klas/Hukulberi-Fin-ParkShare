@@ -11,7 +11,7 @@
     "ci:lint": "npm run build --workspace=@parkshare/contracts && npm run lint:check --workspace=backend && npm run lint --workspace=frontend",
     "ci:test": "npm run test --workspace=backend -- --runInBand && npm run test --workspace=frontend",
     "test": "npm run ci:test",
-    "prepare": "husky install",
+    "prepare": "husky",
     "secret:scan": "secretlint --secretlintignore .secretlintignore ."
   },
   "repository": {
