@@ -22,6 +22,10 @@ type PaymentMessage = {
   copy: string;
 };
 
+type LeafletMapContainer = HTMLDivElement & {
+  _leaflet_id?: number;
+};
+
 const apiBaseUrl =
   process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:3001";
 
@@ -83,7 +87,7 @@ export default function LeafletMap() {
   const [isAuthSubmitting, setIsAuthSubmitting] = useState(false);
   const [currentUser, setCurrentUser] = useState<AuthUser | null>(null);
   const [paymentMessage, setPaymentMessage] = useState<PaymentMessage | null>(
-    readInitialPaymentMessage,
+    null,
   );
 
   useEffect(() => {
@@ -91,14 +95,22 @@ export default function LeafletMap() {
       return;
     }
 
+    let isDisposed = false;
+    const mapContainer = mapRef.current as LeafletMapContainer;
+
     async function loadMap() {
-      if (!mapRef.current) {
+      if (!mapContainer || mapContainer._leaflet_id) {
         return;
       }
 
       const L = await import("leaflet");
+
+      if (isDisposed || mapInstanceRef.current || mapContainer._leaflet_id) {
+        return;
+      }
+
       leafletRef.current = L;
-      const map = L.map(mapRef.current, {
+      const map = L.map(mapContainer, {
         attributionControl: false,
         zoomControl: false,
       }).setView([42.6977, 23.3219], 13);
@@ -115,6 +127,7 @@ export default function LeafletMap() {
     void loadMap();
 
     return () => {
+      isDisposed = true;
       mapInstanceRef.current?.remove();
       mapInstanceRef.current = null;
       tileLayerRefs.current = [];
@@ -168,6 +181,11 @@ export default function LeafletMap() {
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
+    const initialPaymentMessage = readInitialPaymentMessage();
+
+    if (initialPaymentMessage) {
+      queueMicrotask(() => setPaymentMessage(initialPaymentMessage));
+    }
 
     if (params.has("payment")) {
       params.delete("payment");
