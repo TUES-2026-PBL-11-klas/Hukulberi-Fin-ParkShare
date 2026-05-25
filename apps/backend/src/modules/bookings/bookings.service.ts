@@ -7,7 +7,11 @@ import {
   OnModuleDestroy,
   OnModuleInit,
 } from '@nestjs/common';
-import { Booking, BookingStatus as PrismaBookingStatus } from '@prisma/client';
+import {
+  Booking,
+  BookingStatus as PrismaBookingStatus,
+  Prisma,
+} from '@prisma/client';
 import {
   BookingDto,
   BookingStatus,
@@ -82,18 +86,30 @@ export class BookingsService implements OnModuleInit, OnModuleDestroy {
 
     const expiresAt = new Date(Date.now() + HOLD_TTL_MINUTES * 60 * 1000);
 
-    const booking = await this.prisma.booking.create({
-      data: {
-        spotId: input.spotId,
-        driverUserId: input.driverUserId,
-        status: PrismaBookingStatus.HOLD,
-        amount: input.amount,
-        currency,
-        startAt,
-        endAt,
-        expiresAt,
-      },
-    });
+    let booking: Booking;
+
+    try {
+      booking = await this.prisma.booking.create({
+        data: {
+          spotId: input.spotId,
+          driverUserId: input.driverUserId,
+          status: PrismaBookingStatus.HOLD,
+          amount: input.amount,
+          currency,
+          startAt,
+          endAt,
+          expiresAt,
+        },
+      });
+    } catch (error) {
+      if (this.isActiveBookingOverlapError(error)) {
+        throw new ConflictException(
+          'Spot is already booked for the selected time range',
+        );
+      }
+
+      throw error;
+    }
 
     return this.toBookingDto(booking);
   }
@@ -191,5 +207,12 @@ export class BookingsService implements OnModuleInit, OnModuleDestroy {
     }
 
     return date;
+  }
+
+  private isActiveBookingOverlapError(error: unknown): boolean {
+    return (
+      error instanceof Prisma.PrismaClientKnownRequestError &&
+      error.code === 'P2004'
+    );
   }
 }

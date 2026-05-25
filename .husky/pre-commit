@@ -1,3 +1,5 @@
 #!/bin/sh
+set -e
+
 npm run secret:scan
 npm run ci:lint
