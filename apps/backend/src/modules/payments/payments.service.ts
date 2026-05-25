@@ -4,6 +4,7 @@ import {
   InternalServerErrorException,
 } from '@nestjs/common';
 import {
+  BookingStatus,
   PaymentProviderType,
   PaymentStatus,
   Prisma,
@@ -205,7 +206,7 @@ export class PaymentsService {
       return;
     }
 
-    await this.prisma.payment.updateMany({
+    const paymentUpdate = await this.prisma.payment.updateMany({
       where: {
         id: paymentId,
         providerCheckoutSessionId: session.id,
@@ -221,6 +222,13 @@ export class PaymentsService {
             : PaymentStatus.CANCELED,
       },
     });
+
+    if (
+      event.type === 'checkout.session.completed' &&
+      paymentUpdate.count > 0
+    ) {
+      await this.confirmBookingFromSession(session);
+    }
   }
 
   private extractPaymentId(event: StripeWebhookEvent): string | undefined {
@@ -241,6 +249,28 @@ export class PaymentsService {
     const frontendOrigin =
       process.env.FRONTEND_ORIGIN ?? 'http://localhost:3000';
     return `${frontendOrigin}/${path}`;
+  }
+
+  private async confirmBookingFromSession(
+    session: StripeWebhookObject,
+  ): Promise<void> {
+    const bookingId = session.metadata?.bookingId;
+    const userId = session.metadata?.userId;
+
+    if (!bookingId || !userId) {
+      return;
+    }
+
+    await this.prisma.booking.updateMany({
+      where: {
+        driverUserId: userId,
+        id: bookingId,
+        status: BookingStatus.HOLD,
+      },
+      data: {
+        status: BookingStatus.CONFIRMED,
+      },
+    });
   }
 
   private hasPaymentMetadata(
