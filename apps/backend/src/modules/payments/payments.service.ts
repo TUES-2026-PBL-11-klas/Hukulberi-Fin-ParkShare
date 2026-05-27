@@ -2,6 +2,7 @@ import {
   BadRequestException,
   Injectable,
   InternalServerErrorException,
+  UnauthorizedException,
 } from '@nestjs/common';
 import {
   BookingStatus,
@@ -22,9 +23,7 @@ import {
 } from './stripe-client.service';
 import { PrismaService } from '../prisma/prisma.service';
 
-const DEFAULT_CURRENCY = 'eur';
-const DEFAULT_PAYMENT_NAME = 'ParkShare test parking reservation';
-const DEFAULT_PAYMENT_AMOUNT = 1200;
+const DEFAULT_PAYMENT_NAME = 'ParkShare parking reservation';
 
 interface CreateCheckoutSessionInput extends CreateCheckoutSessionRequestDto {
   userId: string;
@@ -40,9 +39,13 @@ export class PaymentsService {
   async createCheckoutSession(
     input: CreateCheckoutSessionInput,
   ): Promise<CreateCheckoutSessionResponseDto> {
-    const amount = DEFAULT_PAYMENT_AMOUNT;
-    const currency = DEFAULT_CURRENCY;
-    const name = DEFAULT_PAYMENT_NAME;
+    const booking = await this.requireBookingForCheckout(
+      input.userId,
+      input.bookingId,
+    );
+    const amount = booking.amount;
+    const currency = booking.currency.toLowerCase();
+    const name = `${DEFAULT_PAYMENT_NAME} · ${booking.spotLabel}`;
     const successUrl = this.defaultUrl(input.successUrl, 'payment/success');
     const cancelUrl = this.defaultUrl(input.cancelUrl, 'payment/cancel');
 
@@ -69,7 +72,7 @@ export class PaymentsService {
         metadata: {
           paymentId: payment.id,
           userId: input.userId,
-          ...(input.bookingId ? { bookingId: input.bookingId } : {}),
+          bookingId: booking.id,
         },
         name,
         successUrl,
@@ -272,6 +275,34 @@ export class PaymentsService {
         status: BookingStatus.CONFIRMED,
       },
     });
+  }
+
+  private async requireBookingForCheckout(userId: string, bookingId?: string) {
+    if (!bookingId) {
+      throw new BadRequestException('bookingId is required for checkout');
+    }
+
+    const booking = await this.prisma.booking.findUnique({
+      where: { id: bookingId },
+    });
+
+    if (!booking) {
+      throw new BadRequestException('Booking was not found');
+    }
+
+    if (booking.driverUserId !== userId) {
+      throw new UnauthorizedException('Booking does not belong to this user');
+    }
+
+    if (booking.status !== BookingStatus.HOLD) {
+      throw new BadRequestException('Only held bookings can be paid for');
+    }
+
+    if (booking.expiresAt <= new Date()) {
+      throw new BadRequestException('Booking hold has expired');
+    }
+
+    return booking;
   }
 
   private hasPaymentMetadata(
