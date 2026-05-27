@@ -63,6 +63,7 @@ export enum BookingStatus {
 
 export interface CreateBookingRequestDto {
   spotId: string;
+  spotLabel: string;
   startAt: string;
   endAt: string;
   amount: number;
@@ -72,6 +73,7 @@ export interface CreateBookingRequestDto {
 export interface BookingDto {
   id: string;
   spotId: string;
+  spotLabel: string;
   driverUserId: string;
   status: BookingStatus;
   amount: number;
