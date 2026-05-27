@@ -1,22 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
+import type { BookingDto } from "@parkshare/contracts";
 
 const apiBaseUrl =
   process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:3001";
-
-const checkoutAmount = 1200;
-const checkoutCurrency = "eur";
-const checkoutDisplayAmount = new Intl.NumberFormat("en", {
-  currency: checkoutCurrency.toUpperCase(),
-  currencyDisplay: "code",
-  style: "currency",
-}).format(checkoutAmount / 100);
-
-type CheckoutResponse = {
-  checkoutUrl: string;
-};
 
 type ApiErrorResponse = {
   message?: string | string[];
@@ -46,14 +36,12 @@ function readErrorMessage(payload: unknown): string {
   return "Could not start Stripe Checkout.";
 }
 
-async function readResponsePayload(
-  response: Response,
-): Promise<unknown> {
+async function readResponsePayload(response: Response): Promise<unknown> {
   const contentType = response.headers.get("content-type") ?? "";
 
   if (contentType.includes("application/json")) {
     try {
-      return (await response.json()) as CheckoutResponse | ApiErrorResponse;
+      return (await response.json()) as BookingDto | ApiErrorResponse;
     } catch {
       return null;
     }
@@ -63,25 +51,101 @@ async function readResponsePayload(
   return text.trim() || null;
 }
 
-function CheckoutContent() {
-  const [isSubmitting, setIsSubmitting] = useState(false);
+function formatDateTime(value: string): string {
+  return new Intl.DateTimeFormat("en", {
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(new Date(value));
+}
+
+function readToken(): string | null {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  return localStorage.getItem("parkshare_access_token");
+}
+
+export default function CheckoutPage() {
+  const searchParams = useSearchParams();
+  const bookingId = searchParams.get("bookingId");
+  const [storedToken] = useState(() => readToken());
+  const [booking, setBooking] = useState<BookingDto | null>(null);
+  const [isLoading, setIsLoading] = useState(Boolean(bookingId && storedToken));
   const [error, setError] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  useEffect(() => {
+    if (!bookingId || !storedToken) {
+      return;
+    }
+
+    async function loadBooking() {
+      setError("");
+
+      try {
+        const response = await fetch(
+          `${apiBaseUrl}/api/v1/bookings/${bookingId}`,
+          {
+            headers: {
+              Authorization: `Bearer ${storedToken}`,
+            },
+          },
+        );
+
+        const payload = await readResponsePayload(response);
+
+        if (!response.ok) {
+          throw new Error(readErrorMessage(payload));
+        }
+
+        if (!isRecord(payload) || typeof payload.id !== "string") {
+          throw new Error("Booking response was malformed.");
+        }
+
+        setBooking(payload as unknown as BookingDto);
+      } catch (loadError) {
+        setError(
+          loadError instanceof Error
+            ? loadError.message
+            : "Could not load booking details.",
+        );
+      } finally {
+        setIsLoading(false);
+      }
+    }
+
+    void loadBooking();
+  }, [bookingId, storedToken]);
+
+  const checkoutDisplayAmount = useMemo(() => {
+    if (!booking) {
+      return "€12.00";
+    }
+
+    return new Intl.NumberFormat("en", {
+      currency: booking.currency.toUpperCase(),
+      currencyDisplay: "code",
+      style: "currency",
+    }).format(booking.amount / 100);
+  }, [booking]);
 
   async function handleCheckout() {
     setError("");
     setIsSubmitting(true);
 
     try {
-      const accessToken = localStorage.getItem("parkshare_access_token");
-
-      if (!accessToken) {
+      if (!storedToken) {
         throw new Error("Sign in before starting checkout.");
       }
 
-      const mapUrl = new URL("/", window.location.origin);
-      const successUrl = new URL(mapUrl);
+      if (!bookingId) {
+        throw new Error("Missing booking id.");
+      }
+
+      const successUrl = new URL("/", window.location.origin);
       successUrl.searchParams.set("payment", "success");
-      const cancelUrl = new URL(mapUrl);
+      const cancelUrl = new URL("/", window.location.origin);
       cancelUrl.searchParams.set("payment", "cancel");
 
       const response = await fetch(
@@ -89,10 +153,11 @@ function CheckoutContent() {
         {
           method: "POST",
           headers: {
-            Authorization: `Bearer ${accessToken}`,
+            Authorization: `Bearer ${storedToken}`,
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
+            bookingId,
             successUrl: successUrl.toString(),
             cancelUrl: cancelUrl.toString(),
           }),
@@ -125,66 +190,192 @@ function CheckoutContent() {
   }
 
   return (
-    <main className="checkout-shell">
-      <section className="checkout-panel" aria-labelledby="checkout-title">
-        <div className="checkout-copy">
-          <Link href="/" className="checkout-back-link">
-            Back to map
+    <main className="min-h-screen bg-[radial-gradient(circle_at_top_left,_rgba(52,211,153,0.18),_transparent_30%),radial-gradient(circle_at_bottom_right,_rgba(20,184,166,0.12),_transparent_28%),linear-gradient(180deg,_#f8fafc_0%,_#eef6ee_100%)] px-4 py-6 text-slate-900 md:px-8 md:py-8">
+      <div className="mx-auto flex min-h-[calc(100vh-3rem)] w-full max-w-5xl flex-col gap-6">
+        <header className="flex flex-col gap-4 rounded-[1.75rem] bg-white/85 p-5 shadow-[0_12px_40px_rgba(15,23,42,0.08)] ring-1 ring-black/5 backdrop-blur md:flex-row md:items-end md:justify-between md:p-6">
+          <div className="space-y-2">
+            <p className="text-sm font-semibold uppercase tracking-[0.28em] text-emerald-600">
+              Stripe checkout
+            </p>
+            <h1 className="font-[var(--font-manrope)] text-3xl font-bold tracking-tight text-slate-900 md:text-4xl">
+              Confirm the hold and complete payment.
+            </h1>
+            <p className="max-w-2xl text-sm leading-6 text-slate-600 md:text-base">
+              The backend creates the hold first, then Stripe only sees the
+              server-owned booking details.
+            </p>
+          </div>
+          <Link
+            href="/bookings"
+            className="inline-flex h-11 items-center justify-center rounded-full bg-slate-100 px-4 text-sm font-semibold text-slate-700 transition hover:bg-slate-200"
+          >
+            Back to bookings
           </Link>
-          <p className="checkout-eyebrow">Stripe test checkout</p>
-          <h1 id="checkout-title">Reserve your ParkShare spot</h1>
-          <p>
-            Use Stripe&apos;s hosted checkout to test the payment flow. Card
-            details are entered only on Stripe, never inside ParkShare.
-          </p>
-        </div>
+        </header>
 
-        <div className="checkout-summary" aria-label="Reservation summary">
-          <div>
-            <span>Parking session</span>
-            <strong>Central Sofia test spot</strong>
-          </div>
-          <div>
-            <span>Duration</span>
-            <strong>2 hours</strong>
-          </div>
-          <div>
-            <span>Total</span>
-            <strong>{checkoutDisplayAmount}</strong>
-          </div>
-        </div>
-
-        {error ? (
-          <p className="checkout-error" role="alert">
-            {error}
-          </p>
+        {!bookingId ? (
+          <section className="rounded-[1.75rem] bg-white p-6 shadow-[0_12px_40px_rgba(15,23,42,0.08)] ring-1 ring-black/5">
+            <h2 className="font-[var(--font-manrope)] text-2xl font-semibold tracking-tight text-slate-900">
+              No booking selected
+            </h2>
+            <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
+              Create a hold from the booking flow first. The checkout page needs a
+              booking id so it can fetch the server-owned reservation details.
+            </p>
+          </section>
         ) : null}
 
-        <button
-          className="stripe-checkout-button"
-          type="button"
-          onClick={handleCheckout}
-          disabled={isSubmitting}
-        >
-          <span className="stripe-logo" aria-hidden="true">
-            <svg viewBox="0 0 64 28" role="img">
-              <path
-                d="M59.6 14.4c0-4.2-2-7.5-5.9-7.5s-6.3 3.3-6.3 7.5c0 5 2.8 7.4 6.8 7.4 2 0 3.4-.4 4.6-1.1v-3.3c-1.1.6-2.5.9-4.1.9-1.6 0-3-.6-3.2-2.5h8.1v-1.4Zm-8.1-1.5c0-1.8 1.1-2.6 2.1-2.6s2 .8 2 2.6h-4.1ZM40.9 6.9c-1.6 0-2.7.7-3.3 1.2l-.2-.9h-3.7v19.1l4.2-.9v-4.6c.6.5 1.5 1 3 1 3 0 5.7-2.4 5.7-7.6-.1-4.8-2.8-7.3-5.7-7.3Zm-1 11.2c-.9 0-1.5-.3-2-.8v-6c.4-.5 1.1-.8 2-.8 1.5 0 2.5 1.7 2.5 3.8 0 2.3-1 3.8-2.5 3.8ZM28 5.9l4.2-.9V1.6l-4.2.9v3.4Zm0 1.3h4.2v14.3H28V7.2ZM23.5 8.4l-.3-1.2h-3.6v14.3h4.2v-9.7c1-.9 2.8-.8 3.3-.7V7.2c-.6-.2-2.5-.5-3.6 1.2ZM15.1 3.7l-4.1.9v13.1c0 2.4 1.8 4.2 4.2 4.2 1.3 0 2.2-.2 2.7-.5V18c-.5.2-2.7.8-2.7-1.3v-5.9h2.7V7.2h-2.8V3.7ZM6.5 11.3c0-.7.6-1 1.5-1 1.3 0 3 .4 4.3 1.1V7.6c-1.4-.6-2.8-.8-4.3-.8-3.5 0-5.9 1.8-5.9 4.9 0 4.8 6.6 4 6.6 6.1 0 .8-.7 1.1-1.7 1.1-1.4 0-3.3-.6-4.7-1.4v3.8c1.6.7 3.2 1 4.7 1 3.6 0 6.1-1.8 6.1-4.9 0-5.2-6.6-4.3-6.6-6.1Z"
-                fill="currentColor"
-              />
-            </svg>
-          </span>
-          <span>{isSubmitting ? "Opening Checkout..." : "Pay with Stripe"}</span>
-        </button>
+        <section className="grid gap-6 lg:grid-cols-[1.05fr_0.95fr]">
+          <article className="rounded-[1.75rem] bg-white p-6 shadow-[0_12px_40px_rgba(15,23,42,0.08)] ring-1 ring-black/5 md:p-8">
+            <div className="flex items-center justify-between gap-4">
+              <div className="space-y-2">
+                <p className="text-sm font-semibold uppercase tracking-[0.25em] text-slate-500">
+                  Booking summary
+                </p>
+                <h2 className="font-[var(--font-manrope)] text-2xl font-semibold tracking-tight text-slate-900">
+                  {booking?.spotLabel ?? "Waiting for booking details"}
+                </h2>
+              </div>
+              {booking ? (
+                <span
+                  className={`rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.22em] ${
+                    booking.status === "HOLD"
+                      ? "bg-amber-100 text-amber-800"
+                      : booking.status === "CONFIRMED"
+                        ? "bg-emerald-100 text-emerald-800"
+                        : booking.status === "CANCELED"
+                          ? "bg-rose-100 text-rose-700"
+                          : "bg-slate-200 text-slate-700"
+                  }`}
+                >
+                  {booking.status}
+                </span>
+              ) : null}
+            </div>
 
-        <p className="checkout-test-card">
-          Test card: 4242 4242 4242 4242, any future expiry, any CVC.
-        </p>
-      </section>
+            {isLoading ? (
+              <div className="mt-6 rounded-[1.5rem] bg-slate-50 p-5 text-sm text-slate-500">
+                Loading booking details...
+              </div>
+            ) : booking ? (
+              <div className="mt-6 grid gap-4">
+                <div className="rounded-[1.5rem] bg-slate-50 p-5">
+                  <div className="grid gap-3 md:grid-cols-2">
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-500">
+                        Time window
+                      </p>
+                      <p className="mt-2 text-sm font-medium text-slate-900">
+                        {formatDateTime(booking.startAt)}
+                      </p>
+                      <p className="text-sm text-slate-600">
+                        to {formatDateTime(booking.endAt)}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-500">
+                        Total
+                      </p>
+                      <p className="mt-2 text-2xl font-bold tracking-tight text-slate-900">
+                        {checkoutDisplayAmount}
+                      </p>
+                      <p className="text-sm text-slate-600">
+                        Held for booking #{booking.id}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="grid gap-3 rounded-[1.5rem] bg-emerald-50 p-5 text-sm text-emerald-900 md:grid-cols-3">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-[0.22em] text-emerald-700">
+                      Spot id
+                    </p>
+                    <p className="mt-2 font-medium">{booking.spotId}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-[0.22em] text-emerald-700">
+                      Hold expires
+                    </p>
+                    <p className="mt-2 font-medium">
+                      {formatDateTime(booking.expiresAt)}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-[0.22em] text-emerald-700">
+                      Currency
+                    </p>
+                    <p className="mt-2 font-medium">{booking.currency.toUpperCase()}</p>
+                  </div>
+                </div>
+
+                {booking.status === "CONFIRMED" ? (
+                  <div className="rounded-[1.5rem] bg-emerald-50 p-5 text-sm leading-6 text-emerald-800">
+                    This booking is already confirmed. You can return to your booking
+                    list or review the payment result on the home map.
+                  </div>
+                ) : null}
+                {booking.status === "EXPIRED" ? (
+                  <div className="rounded-[1.5rem] bg-rose-50 p-5 text-sm leading-6 text-rose-700">
+                    This hold expired. Go back to the booking planner and create a new
+                    reservation.
+                  </div>
+                ) : null}
+
+                {error ? (
+                  <p className="rounded-[1.5rem] bg-rose-50 p-5 text-sm font-medium text-rose-700">
+                    {error}
+                  </p>
+                ) : null}
+
+                <div className="flex flex-wrap gap-3">
+                  <button
+                    type="button"
+                    onClick={handleCheckout}
+                    disabled={isSubmitting || booking.status !== "HOLD"}
+                    className="inline-flex h-12 items-center justify-center rounded-full bg-gradient-to-br from-emerald-400 to-teal-500 px-5 text-sm font-semibold text-white shadow-sm transition hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {isSubmitting ? "Opening Checkout..." : "Pay with Stripe"}
+                  </button>
+                  <Link
+                    href="/bookings"
+                    className="inline-flex h-12 items-center justify-center rounded-full bg-slate-100 px-5 text-sm font-semibold text-slate-700 transition hover:bg-slate-200"
+                  >
+                    Back to bookings
+                  </Link>
+                </div>
+              </div>
+            ) : (
+              <div className="mt-6 rounded-[1.5rem] bg-slate-50 p-5 text-sm leading-6 text-slate-600">
+                We could not load the booking details. Check your sign-in state and go
+                back to the booking planner if needed.
+              </div>
+            )}
+          </article>
+
+          <aside className="rounded-[1.75rem] bg-slate-900 p-6 text-white shadow-[0_12px_40px_rgba(15,23,42,0.08)] md:p-8">
+            <p className="text-sm font-semibold uppercase tracking-[0.28em] text-emerald-300">
+              What happens next
+            </p>
+            <h2 className="mt-2 font-[var(--font-manrope)] text-2xl font-semibold tracking-tight">
+              Stripe completes the payment, then the backend confirms the hold.
+            </h2>
+            <ol className="mt-6 space-y-4 text-sm leading-6 text-slate-200">
+              <li className="rounded-[1.25rem] bg-white/5 p-4">
+                1. The checkout request includes the booking id and server-owned
+                details.
+              </li>
+              <li className="rounded-[1.25rem] bg-white/5 p-4">
+                2. Stripe sends the event back to ParkShare through the webhook route.
+              </li>
+              <li className="rounded-[1.25rem] bg-white/5 p-4">
+                3. The booking switches from HOLD to CONFIRMED if the webhook arrives
+                before expiry.
+              </li>
+            </ol>
+          </aside>
+        </section>
+      </div>
     </main>
   );
-}
-
-export default function CheckoutPage() {
-  return <CheckoutContent />;
 }
