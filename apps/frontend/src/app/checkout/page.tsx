@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import type { BookingDto } from "@parkshare/contracts";
 
@@ -66,7 +66,7 @@ function readToken(): string | null {
   return localStorage.getItem("parkshare_access_token");
 }
 
-export default function CheckoutPage() {
+function CheckoutPageContent() {
   const searchParams = useSearchParams();
   const bookingId = searchParams.get("bookingId");
   const [storedToken] = useState(() => readToken());
@@ -377,5 +377,23 @@ export default function CheckoutPage() {
         </section>
       </div>
     </main>
+  );
+}
+
+export default function CheckoutPage() {
+  return (
+    <Suspense
+      fallback={
+        <main className="min-h-screen bg-[linear-gradient(180deg,_#f8fafc_0%,_#eef6ee_100%)] px-4 py-6 text-slate-900 md:px-8 md:py-8">
+          <div className="mx-auto flex min-h-[calc(100vh-3rem)] w-full max-w-5xl items-center justify-center">
+            <section className="rounded-[1.75rem] bg-white p-6 text-sm font-medium text-slate-600 shadow-[0_12px_40px_rgba(15,23,42,0.08)] ring-1 ring-black/5">
+              Loading checkout...
+            </section>
+          </div>
+        </main>
+      }
+    >
+      <CheckoutPageContent />
+    </Suspense>
   );
 }
