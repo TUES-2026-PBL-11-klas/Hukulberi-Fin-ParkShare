@@ -1,0 +1,102 @@
+# Recording rules for ParkShare
+# These rules compute commonly queried metrics in advance to reduce query load
+# Rule naming: rate_<metric>_per_<unit> for throughput, _total for counts, _duration for latencies
+
+groups:
+  - name: backend_recording_rules
+    interval: 15s
+    rules:
+      # Request rate metrics - overall
+      - record: parkshare:http:request:rate1m
+        expr: rate(http_requests_total[1m])
+      
+      - record: parkshare:http:request:rate5m
+        expr: rate(http_requests_total[5m])
+
+      # Request errors - by module
+      - record: parkshare:http:error:rate1m
+        expr: rate(http_requests_total{status=~"5.."}[1m])
+
+      # Endpoint latency - p50, p95, p99
+      - record: parkshare:http:duration:p50
+        expr: histogram_quantile(0.50, rate(http_request_duration_seconds_bucket[5m]))
+
+      - record: parkshare:http:duration:p95
+        expr: histogram_quantile(0.95, rate(http_request_duration_seconds_bucket[5m]))
+
+      - record: parkshare:http:duration:p99
+        expr: histogram_quantile(0.99, rate(http_request_duration_seconds_bucket[5m]))
+
+  - name: payment_recording_rules
+    interval: 15s
+    rules:
+      # Stripe transaction success rate
+      - record: parkshare:payments:stripe:success:rate1m
+        expr: rate(parkshare_payments_checkout_created_total[1m])
+
+      - record: parkshare:payments:webhook:error:rate1m
+        expr: rate(parkshare_payments_webhook_processed_total{status="failed"}[1m])
+
+      # Payment processing time
+      - record: parkshare:payments:processing:duration:p95
+        expr: histogram_quantile(0.95, rate(parkshare_payments_processing_duration_seconds_bucket[5m]))
+
+  - name: booking_recording_rules
+    interval: 15s
+    rules:
+      # Booking creation rate
+      - record: parkshare:bookings:created:rate1m
+        expr: rate(parkshare_bookings_created_total[1m])
+
+      # Active bookings gauge
+      - record: parkshare:bookings:active:total
+        expr: parkshare_bookings_active_total
+
+      # Booking expiry events
+      - record: parkshare:bookings:expired:rate1m
+        expr: rate(parkshare_bookings_expired_total[1m])
+
+  - name: access_recording_rules
+    interval: 15s
+    rules:
+      # Gate unlock rate
+      - record: parkshare:access:unlock:rate1m
+        expr: rate(parkshare_access_unlock_attempts_total[1m])
+
+      # Unlock success rate
+      - record: parkshare:access:unlock:success:rate1m
+        expr: rate(parkshare_access_unlock_attempts_total{status="success"}[1m])
+
+      # Unlock failure rate
+      - record: parkshare:access:unlock:failure:rate1m
+        expr: rate(parkshare_access_unlock_attempts_total{status="failed"}[1m])
+
+  - name: marketplace_recording_rules
+    interval: 15s
+    rules:
+      # Spot listing rate
+      - record: parkshare:marketplace:spots:created:rate1m
+        expr: rate(parkshare_marketplace_spots_created_total[1m])
+
+      # Active listings gauge
+      - record: parkshare:marketplace:spots:active:total
+        expr: parkshare_marketplace_spots_active_total
+
+      # Review submission rate
+      - record: parkshare:marketplace:reviews:created:rate1m
+        expr: rate(parkshare_marketplace_reviews_created_total[1m])
+
+      # Average review rating
+      - record: parkshare:marketplace:reviews:rating:avg
+        expr: rate(parkshare_marketplace_reviews_rating_sum[1h]) / rate(parkshare_marketplace_reviews_rating_count[1h])
+
+  - name: database_recording_rules
+    interval: 15s
+    rules:
+      # Database connection pool
+      - record: parkshare:db:connection:pool:utilized
+        expr: pg_stat_activity_count / pg_settings_max_connections
+
+      # Slow queries (> 1s)
+      - record: parkshare:db:query:slow:rate1m
+        expr: rate(pg_stat_statements_mean{query!~".*autovacuum.*"}[1m])

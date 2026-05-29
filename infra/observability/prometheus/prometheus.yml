@@ -1,0 +1,87 @@
+# Prometheus configuration for ParkShare
+# Metrics naming convention: parkshare_<module>_<metric>_<unit>
+# Examples: parkshare_payments_checkout_duration_seconds, parkshare_bookings_active_total
+
+global:
+  scrape_interval: 15s       # Default scrape interval
+  evaluation_interval: 15s   # How often to evaluate rules
+  external_labels:
+    environment: '${ENVIRONMENT:-dev}'
+    cluster: 'parkshare'
+
+# Alertmanager configuration (integrates with Dev A's setup)
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+            - 'alertmanager:9093'
+
+# Rule files
+rule_files:
+  - '/etc/prometheus/rules/recording_rules.yml'
+  - '/etc/prometheus/rules/alert_rules.yml'
+
+scrape_configs:
+  # Prometheus self-monitoring
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+
+  # NestJS Backend - metrics exposed via @nestjs/common metrics
+  - job_name: 'backend'
+    metrics_path: '/metrics'
+    static_configs:
+      - targets: ['backend:3000']
+        labels:
+          service: 'parkshare-api'
+          component: 'backend'
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
+    # Retry configuration for reliability
+    scrape_interval: 15s
+    scrape_timeout: 10s
+
+  # Frontend Next.js - optional metrics (via custom metrics endpoint)
+  - job_name: 'frontend'
+    metrics_path: '/api/metrics'
+    static_configs:
+      - targets: ['frontend:3000']
+        labels:
+          service: 'parkshare-web'
+          component: 'frontend'
+    scrape_interval: 30s
+    scrape_timeout: 10s
+
+  # Kubernetes node exporter (if running in K8s)
+  - job_name: 'node'
+    kubernetes_sd_configs:
+      - role: node
+    relabel_configs:
+      - action: labelmap
+        regex: __meta_kubernetes_node_label_(.+)
+      - target_label: __address__
+        replacement: kubernetes.default.svc:443
+      - source_labels: [__meta_kubernetes_node_name]
+        regex: (.+)
+        target_label: __metrics_path__
+        replacement: /api/v1/nodes/${1}/proxy/metrics
+    scheme: https
+    tls_config:
+      ca_file: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+    bearer_token_file: /var/run/secrets/kubernetes.io/serviceaccount/token
+
+  # Docker containers (if using Docker Compose)
+  # Uncomment if using cAdvisor for container metrics
+  # - job_name: 'cadvisor'
+  #   static_configs:
+  #     - targets: ['cadvisor:8080']
+
+  # PostgreSQL exporter (database metrics via pg_exporter)
+  - job_name: 'postgres'
+    static_configs:
+      - targets: ['postgres-exporter:9187']
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
+        replacement: 'parkshare-db'
