@@ -1,0 +1,131 @@
+# Alert rules for ParkShare
+# These alerts notify ops/devs of issues. Routes to Alertmanager (Dev A handles receivers/routing)
+
+groups:
+  - name: backend_alerts
+    interval: 15s
+    rules:
+      # High error rate
+      - alert: HighErrorRate
+        expr: parkshare:http:error:rate1m > 0.05
+        for: 5m
+        labels:
+          severity: warning
+          component: backend
+        annotations:
+          summary: "High HTTP error rate on {{ $labels.service }}"
+          description: "Error rate is {{ $value | humanizePercentage }} (threshold: 5%)"
+
+      # High latency
+      - alert: HighLatency
+        expr: parkshare:http:duration:p95 > 2
+        for: 5m
+        labels:
+          severity: warning
+          component: backend
+        annotations:
+          summary: "High p95 latency on {{ $labels.service }}"
+          description: "p95 latency is {{ $value | humanizeDuration }} (threshold: 2s)"
+
+      # Service down
+      - alert: ServiceDown
+        expr: up{job="backend"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          component: backend
+        annotations:
+          summary: "Backend service is down"
+          description: "Backend has been unreachable for 2 minutes"
+
+  - name: payment_alerts
+    interval: 15s
+    rules:
+      # High Stripe webhook failure rate
+      - alert: HighWebhookFailureRate
+        expr: parkshare:payments:webhook:error:rate1m > 0.1
+        for: 5m
+        labels:
+          severity: critical
+          component: payments
+        annotations:
+          summary: "High Stripe webhook failure rate"
+          description: "Webhook failure rate is {{ $value | humanizePercentage }} (threshold: 10%)"
+
+      # Payment processing degradation
+      - alert: SlowPaymentProcessing
+        expr: parkshare:payments:processing:duration:p95 > 5
+        for: 5m
+        labels:
+          severity: warning
+          component: payments
+        annotations:
+          summary: "Slow payment processing detected"
+          description: "p95 processing time is {{ $value | humanizeDuration }} (threshold: 5s)"
+
+  - name: booking_alerts
+    interval: 15s
+    rules:
+      # High booking failure rate
+      - alert: HighBookingFailureRate
+        expr: 'rate(parkshare_bookings_created_total{status="failed"}[1m]) / rate(parkshare_bookings_created_total[1m]) > 0.1'
+        for: 5m
+        labels:
+          severity: warning
+          component: bookings
+        annotations:
+          summary: "High booking creation failure rate"
+          description: "Failure rate is {{ $value | humanizePercentage }} (threshold: 10%)"
+
+  - name: access_alerts
+    interval: 15s
+    rules:
+      # Gate unlock failures
+      - alert: HighUnlockFailureRate
+        expr: parkshare:access:unlock:failure:rate1m > 0.2
+        for: 5m
+        labels:
+          severity: warning
+          component: access
+        annotations:
+          summary: "High gate unlock failure rate"
+          description: "Failure rate is {{ $value | humanizePercentage }} (threshold: 20%)"
+
+  - name: marketplace_alerts
+    interval: 15s
+    rules:
+      # Low review count (marketplace health indicator)
+      - alert: LowReviewActivity
+        expr: parkshare:marketplace:reviews:created:rate1m < 0.01
+        for: 1h
+        labels:
+          severity: info
+          component: marketplace
+        annotations:
+          summary: "Low review activity detected"
+          description: "Review rate is {{ $value | humanizePercentage }}/min"
+
+  - name: database_alerts
+    interval: 15s
+    rules:
+      # High connection pool utilization
+      - alert: HighConnectionPoolUtilization
+        expr: parkshare:db:connection:pool:utilized > 0.8
+        for: 5m
+        labels:
+          severity: warning
+          component: database
+        annotations:
+          summary: "Database connection pool utilization is high"
+          description: "Pool utilization is {{ $value | humanizePercentage }} (threshold: 80%)"
+
+      # Service down
+      - alert: DatabaseDown
+        expr: up{job="postgres"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          component: database
+        annotations:
+          summary: "PostgreSQL database is down"
+          description: "Database has been unreachable for 1 minute"
