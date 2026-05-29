@@ -10,6 +10,7 @@
     "test": "echo \"No frontend tests configured yet\""
   },
   "dependencies": {
+    "@parkshare/contracts": "*",
     "@types/leaflet": "^1.9.21",
     "leaflet": "^1.9.4",
     "next": "16.2.6",
