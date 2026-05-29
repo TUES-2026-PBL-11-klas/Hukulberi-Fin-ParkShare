@@ -10,6 +10,7 @@ import { PrismaService } from '../prisma/prisma.service';
 const baseBooking = {
   id: 'booking-1',
   spotId: '11111111-1111-1111-1111-111111111111',
+  spotLabel: 'Central Sofia test spot',
   driverUserId: '22222222-2222-2222-2222-222222222222',
   status: BookingStatus.HOLD,
   amount: 1200,
@@ -57,6 +58,7 @@ describe('BookingsService', () => {
       amount: 1200,
       driverUserId: baseBooking.driverUserId,
       endAt: baseBooking.endAt.toISOString(),
+      spotLabel: baseBooking.spotLabel,
       spotId: baseBooking.spotId,
       startAt: baseBooking.startAt.toISOString(),
     });
@@ -75,6 +77,7 @@ describe('BookingsService', () => {
         driverUserId: baseBooking.driverUserId,
         endAt: baseBooking.endAt,
         expiresAt: expect.any(Date) as Date,
+        spotLabel: baseBooking.spotLabel,
         spotId: baseBooking.spotId,
         startAt: baseBooking.startAt,
         status: BookingStatus.HOLD,
@@ -96,6 +99,7 @@ describe('BookingsService', () => {
       amount: 1200,
       driverUserId: baseBooking.driverUserId,
       endAt: baseBooking.endAt.toISOString(),
+      spotLabel: baseBooking.spotLabel,
       spotId: baseBooking.spotId,
       startAt: baseBooking.startAt.toISOString(),
     });
@@ -103,6 +107,7 @@ describe('BookingsService', () => {
       amount: 1200,
       driverUserId: baseBooking.driverUserId,
       endAt: baseBooking.endAt.toISOString(),
+      spotLabel: baseBooking.spotLabel,
       spotId: baseBooking.spotId,
       startAt: baseBooking.startAt.toISOString(),
     });
@@ -122,6 +127,7 @@ describe('BookingsService', () => {
         amount: 1200,
         driverUserId: baseBooking.driverUserId,
         endAt: baseBooking.endAt.toISOString(),
+        spotLabel: baseBooking.spotLabel,
         spotId: baseBooking.spotId,
         startAt: baseBooking.startAt.toISOString(),
       }),
@@ -147,6 +153,7 @@ describe('BookingsService', () => {
         amount: 1200,
         driverUserId: baseBooking.driverUserId,
         endAt: baseBooking.endAt.toISOString(),
+        spotLabel: baseBooking.spotLabel,
         spotId: baseBooking.spotId,
         startAt: baseBooking.startAt.toISOString(),
       }),
@@ -173,6 +180,7 @@ describe('BookingsService', () => {
         amount: 1200,
         driverUserId: baseBooking.driverUserId,
         endAt: baseBooking.endAt.toISOString(),
+        spotLabel: baseBooking.spotLabel,
         spotId: baseBooking.spotId,
         startAt: baseBooking.startAt.toISOString(),
       }),
