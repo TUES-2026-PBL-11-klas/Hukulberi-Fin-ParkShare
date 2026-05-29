@@ -43,17 +43,23 @@ enum WebhookProcessingStatus {
   FAILED
 }
 
+enum AccessEventStatus {
+  SUCCESS
+  FAILED
+}
+
 model User {
-  id           String     @id @default(uuid()) @db.Uuid
-  email        String     @unique @db.VarChar(320)
-  name         String     @db.VarChar(120)
-  passwordHash String     @map("password_hash") @db.Text
-  role         UserRole   @default(DRIVER)
-  status       UserStatus @default(ACTIVE)
-  createdAt    DateTime   @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt    DateTime   @updatedAt @map("updated_at") @db.Timestamptz(6)
+  id           String        @id @default(uuid()) @db.Uuid
+  email        String        @unique @db.VarChar(320)
+  name         String        @db.VarChar(120)
+  passwordHash String        @map("password_hash") @db.Text
+  role         UserRole      @default(DRIVER)
+  status       UserStatus    @default(ACTIVE)
+  createdAt    DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime      @updatedAt @map("updated_at") @db.Timestamptz(6)
   payments     Payment[]
   bookings     Booking[]
+  accessEvents AccessEvent[]
 
   @@map("users")
 }
@@ -71,8 +77,8 @@ model Payment {
   createdAt                 DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt                 DateTime            @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  driverUser User                 @relation(fields: [driverUserId], references: [id], onDelete: Restrict)
-  booking    Booking?             @relation(fields: [bookingId], references: [id], onDelete: SetNull)
+  driverUser User                  @relation(fields: [driverUserId], references: [id], onDelete: Restrict)
+  booking    Booking?              @relation(fields: [bookingId], references: [id], onDelete: SetNull)
   webhooks   PaymentWebhookEvent[]
 
   @@index([driverUserId])
@@ -93,8 +99,9 @@ model Booking {
   createdAt    DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt    DateTime      @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  driverUser User      @relation(fields: [driverUserId], references: [id], onDelete: Restrict)
-  payments   Payment[]
+  driverUser   User          @relation(fields: [driverUserId], references: [id], onDelete: Restrict)
+  payments     Payment[]
+  accessEvents AccessEvent[]
 
   @@index([driverUserId])
   @@index([spotId])
@@ -118,4 +125,19 @@ model PaymentWebhookEvent {
 
   @@index([paymentId])
   @@map("payment_webhook_events")
+}
+
+model AccessEvent {
+  id           String            @id @default(uuid()) @db.Uuid
+  bookingId    String            @map("booking_id") @db.Uuid
+  driverUserId String            @map("driver_user_id") @db.Uuid
+  status       AccessEventStatus
+  timestamp    DateTime          @default(now()) @db.Timestamptz(6)
+
+  booking    Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  driverUser User    @relation(fields: [driverUserId], references: [id], onDelete: Cascade)
+
+  @@index([bookingId])
+  @@index([driverUserId])
+  @@map("access_events")
 }
