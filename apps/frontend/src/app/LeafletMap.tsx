@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 
 type MapTheme = "light" | "dark";
@@ -70,6 +71,7 @@ function readInitialPaymentMessage(): PaymentMessage | null {
 }
 
 export default function LeafletMap() {
+  const router = useRouter();
   const mapRef = useRef<HTMLDivElement | null>(null);
   const leafletRef = useRef<typeof import("leaflet") | null>(null);
   const mapInstanceRef = useRef<import("leaflet").Map | null>(null);
@@ -289,7 +291,11 @@ export default function LeafletMap() {
     <div className="relative h-screen w-screen" data-map-theme={theme}>
       <div ref={mapRef} className="h-full w-full" />
       <nav className="map-primary-actions" aria-label="Map actions">
-        <button type="button" className="map-primary-action">
+        <button
+          type="button"
+          className="map-primary-action"
+          onClick={() => router.push("/bookings")}
+        >
           <svg
             aria-hidden="true"
             viewBox="0 0 24 24"

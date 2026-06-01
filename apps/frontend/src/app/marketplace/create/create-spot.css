@@ -1,0 +1,307 @@
+/* Create/Edit Spot Form Styles */
+
+.create-spot-container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 20px;
+  display: grid;
+  grid-template-columns: 1fr 300px;
+  gap: 30px;
+  background: #f5f5f5;
+  min-height: 100vh;
+}
+
+.create-spot-form-wrapper {
+  background: white;
+  border-radius: 12px;
+  padding: 40px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.form-header {
+  text-align: center;
+  margin-bottom: 40px;
+}
+
+.form-header h1 {
+  font-size: 2rem;
+  margin: 0 0 10px 0;
+  color: #1a1a1a;
+}
+
+.form-header p {
+  font-size: 1.1rem;
+  color: #666;
+  margin: 0;
+}
+
+.error-message {
+  background: #fee;
+  color: #c33;
+  padding: 16px;
+  border-radius: 6px;
+  margin-bottom: 20px;
+  font-weight: 500;
+}
+
+.create-spot-form {
+  display: flex;
+  flex-direction: column;
+  gap: 30px;
+}
+
+.form-section {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.form-section h2 {
+  font-size: 1.3rem;
+  margin: 0;
+  color: #1a1a1a;
+  border-bottom: 2px solid #667eea;
+  padding-bottom: 10px;
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.form-group label {
+  font-weight: 600;
+  color: #1a1a1a;
+  font-size: 0.95rem;
+}
+
+.form-input,
+.form-textarea {
+  padding: 12px 16px;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  font-size: 1rem;
+  font-family: inherit;
+  transition: all 0.2s;
+}
+
+.form-input:focus,
+.form-textarea:focus {
+  outline: none;
+  border-color: #667eea;
+  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+}
+
+.form-textarea {
+  resize: vertical;
+  min-height: 120px;
+}
+
+.form-hint {
+  font-size: 0.85rem;
+  color: #999;
+  margin: 0;
+}
+
+.form-hint.success {
+  color: #27ae60;
+}
+
+/* Coordinates Group */
+
+.coordinates-group {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 15px;
+}
+
+.geolocation-btn-form {
+  padding: 12px 16px;
+  background: #f0f0f0;
+  border: 2px dashed #667eea;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 600;
+  color: #667eea;
+  font-size: 0.95rem;
+  transition: all 0.3s;
+}
+
+.geolocation-btn-form:hover {
+  background: #f9f9f9;
+  border-style: solid;
+}
+
+/* Form Actions */
+
+.form-actions {
+  display: flex;
+  gap: 15px;
+  justify-content: center;
+  margin-top: 20px;
+  padding-top: 20px;
+  border-top: 1px solid #eee;
+}
+
+.cancel-btn {
+  padding: 12px 32px;
+  background: #f0f0f0;
+  color: #666;
+  border: none;
+  border-radius: 6px;
+  text-decoration: none;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s;
+  text-align: center;
+}
+
+.cancel-btn:hover {
+  background: #e0e0e0;
+  color: #333;
+}
+
+.submit-btn {
+  padding: 12px 48px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-weight: 700;
+  font-size: 1rem;
+  cursor: pointer;
+  transition: all 0.3s;
+}
+
+.submit-btn:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 12px rgba(102, 126, 234, 0.4);
+}
+
+.submit-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* Info Panel */
+
+.create-spot-info {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.info-card {
+  background: white;
+  border-radius: 12px;
+  padding: 20px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.info-card h3 {
+  font-size: 1.1rem;
+  margin: 0 0 12px 0;
+  color: #1a1a1a;
+}
+
+.info-card ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.info-card li {
+  padding: 8px 0;
+  color: #666;
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+
+.info-card li strong {
+  color: #1a1a1a;
+}
+
+.info-card p {
+  margin: 0;
+  color: #666;
+  font-size: 0.9rem;
+  line-height: 1.6;
+}
+
+.earning-example {
+  background: #f0f8ff;
+  padding: 12px;
+  border-radius: 6px;
+  border-left: 4px solid #667eea;
+  font-weight: 500;
+}
+
+.earning-note {
+  font-size: 0.85rem;
+  color: #999;
+  margin-top: 8px;
+}
+
+/* Responsive */
+
+@media (max-width: 1024px) {
+  .create-spot-container {
+    grid-template-columns: 1fr;
+  }
+
+  .create-spot-info {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+@media (max-width: 768px) {
+  .create-spot-container {
+    padding: 12px;
+    gap: 15px;
+  }
+
+  .create-spot-form-wrapper {
+    padding: 20px;
+  }
+
+  .form-header h1 {
+    font-size: 1.5rem;
+  }
+
+  .coordinates-group {
+    grid-template-columns: 1fr;
+  }
+
+  .form-actions {
+    flex-direction: column;
+  }
+
+  .cancel-btn,
+  .submit-btn {
+    width: 100%;
+  }
+
+  .create-spot-info {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 480px) {
+  .create-spot-form-wrapper {
+    padding: 16px;
+  }
+
+  .form-header h1 {
+    font-size: 1.3rem;
+  }
+
+  .form-section h2 {
+    font-size: 1.1rem;
+  }
+
+  .info-card {
+    padding: 16px;
+  }
+}

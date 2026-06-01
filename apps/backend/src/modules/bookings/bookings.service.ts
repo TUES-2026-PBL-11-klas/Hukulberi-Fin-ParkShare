@@ -56,6 +56,10 @@ export class BookingsService implements OnModuleInit, OnModuleDestroy {
       throw new BadRequestException('Spot id is required');
     }
 
+    if (!input.spotLabel?.trim()) {
+      throw new BadRequestException('Spot label is required');
+    }
+
     const startAt = this.parseDate(input.startAt, 'startAt');
     const endAt = this.parseDate(input.endAt, 'endAt');
 
@@ -100,6 +104,7 @@ export class BookingsService implements OnModuleInit, OnModuleDestroy {
       booking = await this.prisma.booking.create({
         data: {
           spotId: input.spotId,
+          spotLabel: input.spotLabel.trim(),
           driverUserId: input.driverUserId,
           status: PrismaBookingStatus.HOLD,
           amount: input.amount,
@@ -205,6 +210,7 @@ export class BookingsService implements OnModuleInit, OnModuleDestroy {
     return {
       id: booking.id,
       spotId: booking.spotId,
+      spotLabel: booking.spotLabel,
       driverUserId: booking.driverUserId,
       status: booking.status as BookingStatus,
       amount: booking.amount,

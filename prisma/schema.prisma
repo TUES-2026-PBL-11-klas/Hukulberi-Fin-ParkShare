@@ -37,14 +37,23 @@ enum BookingStatus {
   EXPIRED
 }
 
-enum WebhookProcessingStatus {
-  PENDING
-  PROCESSED
-  FAILED
+enum ReviewRating {
+  ONE
+  TWO
+  THREE
+  FOUR
+  FIVE
 }
 
 enum AccessEventStatus {
   SUCCESS
+  FAILED
+  DENIED
+}
+
+enum WebhookProcessingStatus {
+  PENDING
+  PROCESSED
   FAILED
 }
 
@@ -59,7 +68,9 @@ model User {
   updatedAt    DateTime      @updatedAt @map("updated_at") @db.Timestamptz(6)
   payments     Payment[]
   bookings     Booking[]
-  accessEvents AccessEvent[]
+  spots        Spot[]          // Spots hosted by this user
+  reviews      Review[]        // Reviews written by this user
+  accessEvents AccessEvent[]   // Access events triggered by this user
 
   @@map("users")
 }
@@ -89,6 +100,7 @@ model Payment {
 model Booking {
   id           String        @id @default(uuid()) @db.Uuid
   spotId       String        @map("spot_id") @db.Uuid
+  spotLabel    String        @map("spot_label") @db.VarChar(160)
   driverUserId String        @map("driver_user_id") @db.Uuid
   status       BookingStatus @default(HOLD)
   amount       Int
@@ -99,8 +111,10 @@ model Booking {
   createdAt    DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt    DateTime      @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  driverUser   User          @relation(fields: [driverUserId], references: [id], onDelete: Restrict)
-  payments     Payment[]
+  driverUser User      @relation(fields: [driverUserId], references: [id], onDelete: Restrict)
+  spot       Spot      @relation(fields: [spotId], references: [id], onDelete: Restrict)
+  payments   Payment[]
+  review     Review?        // One review per booking (optional, created after completed)
   accessEvents AccessEvent[]
 
   @@index([driverUserId])
@@ -127,17 +141,62 @@ model PaymentWebhookEvent {
   @@map("payment_webhook_events")
 }
 
-model AccessEvent {
-  id           String            @id @default(uuid()) @db.Uuid
-  bookingId    String            @map("booking_id") @db.Uuid
-  driverUserId String            @map("driver_user_id") @db.Uuid
-  status       AccessEventStatus
-  timestamp    DateTime          @default(now()) @db.Timestamptz(6)
+model Spot {
+  id          String   @id @default(uuid()) @db.Uuid
+  hostUserId  String   @map("host_user_id") @db.Uuid
+  title       String   @db.VarChar(200)
+  description String?  @db.Text
+  address     String   @db.VarChar(500)
+  latitude    Float    @db.Real
+  longitude   Float    @db.Real
+  pricePerHour Int    // Price in cents (e.g., 1500 = $15.00)
+  isActive    Boolean  @default(true) @map("is_active")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  booking    Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
-  driverUser User    @relation(fields: [driverUserId], references: [id], onDelete: Cascade)
+  hostUser User      @relation(fields: [hostUserId], references: [id], onDelete: Restrict)
+  bookings Booking[]
+  reviews  Review[]
+
+  @@index([hostUserId])
+  @@index([isActive])
+  @@index([latitude, longitude])  // For geospatial queries
+  @@map("spots")
+}
+
+model Review {
+  id        String        @id @default(uuid()) @db.Uuid
+  bookingId String        @unique @map("booking_id") @db.Uuid  // One review per booking
+  authorId  String        @map("author_id") @db.Uuid           // Driver who completed booking
+  spotId    String        @map("spot_id") @db.Uuid             // Which spot they're reviewing
+  rating    ReviewRating
+  comment   String?       @db.Text
+  createdAt DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime      @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  booking Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  author  User    @relation(fields: [authorId], references: [id], onDelete: Restrict)
+  spot    Spot    @relation(fields: [spotId], references: [id], onDelete: Restrict)
+
+  @@index([spotId])
+  @@index([authorId])
+  @@map("reviews")
+}
+
+model AccessEvent {
+  id        String              @id @default(uuid()) @db.Uuid
+  bookingId String              @map("booking_id") @db.Uuid
+  userId    String              @map("user_id") @db.Uuid
+  gateId    String              @map("gate_id") @db.VarChar(100)
+  status    AccessEventStatus
+  reason    String?             @db.VarChar(255)  // Reason for failure/denial
+  createdAt DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  booking Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Restrict)
 
   @@index([bookingId])
-  @@index([driverUserId])
+  @@index([userId])
+  @@index([gateId])
   @@map("access_events")
 }
