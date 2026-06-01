@@ -3,6 +3,7 @@ import {
   Injectable,
   ForbiddenException,
   NotFoundException,
+  Logger,
 } from '@nestjs/common';
 import { Counter, Histogram, Gauge, register } from 'prom-client';
 import { ReviewRating } from '@prisma/client';
@@ -11,6 +12,7 @@ import { CreateSpotDto, UpdateSpotDto, SearchSpotsDto } from './dto';
 
 @Injectable()
 export class SpotsService {
+  private readonly logger = new Logger(SpotsService.name);
   private spotsCreated: Counter;
   private spotsActive: Gauge;
   private searchDuration: Histogram;
@@ -21,26 +23,26 @@ export class SpotsService {
   }
 
   private initializeMetrics() {
-    this.spotsCreated = new Counter({
+    this.spotsCreated = this.getOrCreateCounter({
       name: 'parkshare_marketplace_spots_created_total',
       help: 'Total parking spots created',
       registers: [register],
     });
 
-    this.spotsActive = new Gauge({
+    this.spotsActive = this.getOrCreateGauge({
       name: 'parkshare_marketplace_spots_active_total',
       help: 'Currently active parking spots',
       registers: [register],
     });
 
-    this.searchDuration = new Histogram({
+    this.searchDuration = this.getOrCreateHistogram({
       name: 'parkshare_marketplace_spots_search_duration_seconds',
       help: 'Spot search query duration in seconds',
       buckets: [0.05, 0.1, 0.25, 0.5, 1, 2],
       registers: [register],
     });
 
-    this.searchResults = new Histogram({
+    this.searchResults = this.getOrCreateHistogram({
       name: 'parkshare_marketplace_spots_search_results_count',
       help: 'Number of spots returned from search',
       buckets: [1, 5, 10, 25, 50, 100, 250, 500],
@@ -307,7 +309,35 @@ export class SpotsService {
    * Update active spots gauge
    */
   private async updateActiveSpots() {
-    const count = await this.prisma.spot.count({ where: { isActive: true } });
-    this.spotsActive.set(count);
+    try {
+      const count = await this.prisma.spot.count({ where: { isActive: true } });
+
+      if (Number.isFinite(count)) {
+        this.spotsActive.set(count);
+      }
+    } catch (error) {
+      this.logger.warn(
+        `Failed to update active spots metric: ${
+          error instanceof Error ? error.message : 'Unknown error'
+        }`,
+      );
+    }
+  }
+
+  private getOrCreateCounter(config: ConstructorParameters<typeof Counter>[0]) {
+    const existing = register.getSingleMetric(config.name);
+    return existing instanceof Counter ? existing : new Counter(config);
+  }
+
+  private getOrCreateGauge(config: ConstructorParameters<typeof Gauge>[0]) {
+    const existing = register.getSingleMetric(config.name);
+    return existing instanceof Gauge ? existing : new Gauge(config);
+  }
+
+  private getOrCreateHistogram(
+    config: ConstructorParameters<typeof Histogram>[0],
+  ) {
+    const existing = register.getSingleMetric(config.name);
+    return existing instanceof Histogram ? existing : new Histogram(config);
   }
 }
