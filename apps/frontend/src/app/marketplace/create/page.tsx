@@ -256,7 +256,7 @@ export default function CreateSpotPage() {
         </div>
 
         <div className="info-card">
-          <h3>What You'll Earn</h3>
+          <h3>What You&apos;ll Earn</h3>
           <p className="earning-example">
             At <strong>$15/hour</strong>, a single 2-hour booking = <strong>$30</strong> (minus 15% fee)
           </p>

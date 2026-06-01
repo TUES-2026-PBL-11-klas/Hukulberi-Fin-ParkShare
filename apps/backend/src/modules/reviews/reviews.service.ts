@@ -5,10 +5,10 @@ import {
   ConflictException,
 } from '@nestjs/common';
 import { Counter, register } from 'prom-client';
+import { ReviewRating } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateReviewDto } from './dto';
 
-/* eslint-disable @typescript-eslint/no-unsafe-assignment,@typescript-eslint/no-unsafe-call,@typescript-eslint/no-unsafe-member-access */
 @Injectable()
 export class ReviewsService {
   private reviewsCreated: Counter;
@@ -197,10 +197,15 @@ export class ReviewsService {
     });
 
     // Convert ratings to numbers (ONE=1, TWO=2, etc.)
-    const ratingNumbers = reviews.map((r) =>
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
-      parseInt(r.rating.replace(/\D/g, ''), 10),
-    );
+    const ratingMap: Record<ReviewRating, number> = {
+      ONE: 1,
+      TWO: 2,
+      THREE: 3,
+      FOUR: 4,
+      FIVE: 5,
+    };
+
+    const ratingNumbers = reviews.map((r) => ratingMap[r.rating]);
 
     if (ratingNumbers.length === 0) {
       return {
@@ -222,11 +227,11 @@ export class ReviewsService {
 
     // Count distribution
     const distribution = {
-      ONE: reviews.filter((r) => r.rating === 'ONE').length,
-      TWO: reviews.filter((r) => r.rating === 'TWO').length,
-      THREE: reviews.filter((r) => r.rating === 'THREE').length,
-      FOUR: reviews.filter((r) => r.rating === 'FOUR').length,
-      FIVE: reviews.filter((r) => r.rating === 'FIVE').length,
+      ONE: reviews.filter((r) => r.rating === ReviewRating.ONE).length,
+      TWO: reviews.filter((r) => r.rating === ReviewRating.TWO).length,
+      THREE: reviews.filter((r) => r.rating === ReviewRating.THREE).length,
+      FOUR: reviews.filter((r) => r.rating === ReviewRating.FOUR).length,
+      FIVE: reviews.filter((r) => r.rating === ReviewRating.FIVE).length,
     };
 
     return {

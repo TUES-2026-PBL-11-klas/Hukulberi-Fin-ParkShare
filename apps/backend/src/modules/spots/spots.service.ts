@@ -1,14 +1,14 @@
-/* eslint-disable @typescript-eslint/no-unsafe-return,@typescript-eslint/no-unsafe-member-access */
+/* eslint-disable @typescript-eslint/no-unsafe-assignment,@typescript-eslint/no-unsafe-member-access */
 import {
   Injectable,
   ForbiddenException,
   NotFoundException,
 } from '@nestjs/common';
 import { Counter, Histogram, Gauge, register } from 'prom-client';
+import { ReviewRating } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateSpotDto, UpdateSpotDto, SearchSpotsDto } from './dto';
 
-/* eslint-disable @typescript-eslint/no-unsafe-assignment,@typescript-eslint/no-unsafe-call,@typescript-eslint/no-unsafe-member-access */
 @Injectable()
 export class SpotsService {
   private spotsCreated: Counter;
@@ -147,11 +147,16 @@ export class SpotsService {
     this.searchResults.observe(spots.length);
 
     // Calculate average rating for each spot
+    const ratingMap: Record<ReviewRating, number> = {
+      ONE: 1,
+      TWO: 2,
+      THREE: 3,
+      FOUR: 4,
+      FIVE: 5,
+    };
+
     const spotsWithRatings = spots.map((spot) => {
-      const ratings = spot.reviews.map((r) =>
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
-        parseInt(r.rating.replace(/\D/g, ''), 10),
-      );
+      const ratings = spot.reviews.map((r) => ratingMap[r.rating]);
       const avgRating =
         ratings.length > 0
           ? ratings.reduce((a, b) => a + b) / ratings.length
@@ -210,11 +215,16 @@ export class SpotsService {
       throw new NotFoundException(`Spot with ID ${id} not found`);
     }
 
+    const ratingMap: Record<ReviewRating, number> = {
+      ONE: 1,
+      TWO: 2,
+      THREE: 3,
+      FOUR: 4,
+      FIVE: 5,
+    };
+
     // Calculate average rating
-    const ratings = spot.reviews.map((r) =>
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
-      parseInt(r.rating.replace(/\D/g, ''), 10),
-    );
+    const ratings = spot.reviews.map((r) => ratingMap[r.rating]);
     const avgRating =
       ratings.length > 0 ? ratings.reduce((a, b) => a + b) / ratings.length : 0;
 

@@ -40,11 +40,7 @@ export default function MarketplacePage() {
   const LIMIT = 12;
 
   // Fetch spots on component mount and when filters change
-  useEffect(() => {
-    fetchSpots();
-  }, [filters, offset]);
-
-  const fetchSpots = async () => {
+  const fetchSpots = React.useCallback(async () => {
     setLoading(true);
     setError(null);
 
@@ -69,7 +65,12 @@ export default function MarketplacePage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [filters, offset]);
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    fetchSpots();
+  }, [fetchSpots]);
 
   const handleSearch = (search: string) => {
     setFilters((prev) => ({ ...prev, search }));

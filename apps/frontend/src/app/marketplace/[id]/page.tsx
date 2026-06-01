@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
-import { MapPin, Star, DollarSign, User, MessageSquare, Calendar } from 'lucide-react';
+import { MapPin, Star, DollarSign, MessageSquare, Calendar } from 'lucide-react';
 import './spot-details.css';
 
 interface Review {
