@@ -84,3 +84,5 @@ export interface BookingDto {
   createdAt: string;
   updatedAt: string;
 }
+
+export * from './access';

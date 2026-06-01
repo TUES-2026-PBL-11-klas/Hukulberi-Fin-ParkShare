@@ -58,14 +58,14 @@ enum WebhookProcessingStatus {
 }
 
 model User {
-  id           String     @id @default(uuid()) @db.Uuid
-  email        String     @unique @db.VarChar(320)
-  name         String     @db.VarChar(120)
-  passwordHash String     @map("password_hash") @db.Text
-  role         UserRole   @default(DRIVER)
-  status       UserStatus @default(ACTIVE)
-  createdAt    DateTime   @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt    DateTime   @updatedAt @map("updated_at") @db.Timestamptz(6)
+  id           String        @id @default(uuid()) @db.Uuid
+  email        String        @unique @db.VarChar(320)
+  name         String        @db.VarChar(120)
+  passwordHash String        @map("password_hash") @db.Text
+  role         UserRole      @default(DRIVER)
+  status       UserStatus    @default(ACTIVE)
+  createdAt    DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime      @updatedAt @map("updated_at") @db.Timestamptz(6)
   payments     Payment[]
   bookings     Booking[]
   spots        Spot[]          // Spots hosted by this user
@@ -88,8 +88,8 @@ model Payment {
   createdAt                 DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt                 DateTime            @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  driverUser User                 @relation(fields: [driverUserId], references: [id], onDelete: Restrict)
-  booking    Booking?             @relation(fields: [bookingId], references: [id], onDelete: SetNull)
+  driverUser User                  @relation(fields: [driverUserId], references: [id], onDelete: Restrict)
+  booking    Booking?              @relation(fields: [bookingId], references: [id], onDelete: SetNull)
   webhooks   PaymentWebhookEvent[]
 
   @@index([driverUserId])
@@ -115,6 +115,7 @@ model Booking {
   spot       Spot      @relation(fields: [spotId], references: [id], onDelete: Restrict)
   payments   Payment[]
   review     Review?        // One review per booking (optional, created after completed)
+  accessEvents AccessEvent[]
 
   @@index([driverUserId])
   @@index([spotId])
@@ -191,7 +192,8 @@ model AccessEvent {
   reason    String?             @db.VarChar(255)  // Reason for failure/denial
   createdAt DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
 
-  user User @relation(fields: [userId], references: [id], onDelete: Restrict)
+  booking Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Restrict)
 
   @@index([bookingId])
   @@index([userId])
