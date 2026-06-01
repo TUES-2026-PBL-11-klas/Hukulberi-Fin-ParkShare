@@ -4,6 +4,8 @@ import Link from "next/link";
 import { Suspense, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import type { BookingDto } from "@parkshare/contracts";
+import PageViewBeacon from "../PageViewBeacon";
+import { recordFrontendEvent } from "../../lib/frontend-metrics";
 
 const apiBaseUrl =
   process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:3001";
@@ -135,6 +137,8 @@ function CheckoutPageContent() {
     setIsSubmitting(true);
 
     try {
+      void recordFrontendEvent("checkout_start", "checkout");
+
       if (!storedToken) {
         throw new Error("Sign in before starting checkout.");
       }
@@ -178,6 +182,7 @@ function CheckoutPageContent() {
         throw new Error("Stripe did not return a checkout URL.");
       }
 
+      void recordFrontendEvent("checkout_redirect", "checkout");
       window.location.assign(payload.checkoutUrl);
     } catch (checkoutError) {
       setError(
@@ -191,6 +196,7 @@ function CheckoutPageContent() {
 
   return (
     <main className="min-h-screen bg-[radial-gradient(circle_at_top_left,_rgba(52,211,153,0.18),_transparent_30%),radial-gradient(circle_at_bottom_right,_rgba(20,184,166,0.12),_transparent_28%),linear-gradient(180deg,_#f8fafc_0%,_#eef6ee_100%)] px-4 py-6 text-slate-900 md:px-8 md:py-8">
+      <PageViewBeacon page="checkout" />
       <div className="mx-auto flex min-h-[calc(100vh-3rem)] w-full max-w-5xl flex-col gap-6">
         <header className="flex flex-col gap-4 rounded-[1.75rem] bg-white/85 p-5 shadow-[0_12px_40px_rgba(15,23,42,0.08)] ring-1 ring-black/5 backdrop-blur md:flex-row md:items-end md:justify-between md:p-6">
           <div className="space-y-2">

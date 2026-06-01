@@ -1,5 +1,11 @@
 import LeafletMap from "./LeafletMap";
+import PageViewBeacon from "./PageViewBeacon";
 
 export default function Home() {
-  return <LeafletMap />;
+  return (
+    <>
+      <PageViewBeacon page="home" />
+      <LeafletMap />
+    </>
+  );
 }

@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/no-unsafe-assignment,@typescript-eslint/no-unsafe-member-access */
+/* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-return */
 import {
   Injectable,
   ForbiddenException,
@@ -145,8 +145,9 @@ export class SpotsService {
     });
 
     const duration = (Date.now() - startTime) / 1000;
+    const resultCount = Array.isArray(spots) ? spots.length : 0;
     this.searchDuration.observe(duration);
-    this.searchResults.observe(spots.length);
+    this.searchResults.observe(resultCount);
 
     // Calculate average rating for each spot
     const ratingMap: Record<ReviewRating, number> = {
@@ -293,7 +294,7 @@ export class SpotsService {
   /**
    * Get all spots by a specific host
    */
-  async getSpotsByHost(hostUserId: string) {
+  getSpotsByHost(hostUserId: string) {
     return this.prisma.spot.findMany({
       where: { hostUserId },
       include: {
@@ -311,9 +312,10 @@ export class SpotsService {
   private async updateActiveSpots() {
     try {
       const count = await this.prisma.spot.count({ where: { isActive: true } });
+      const countValue = Number(count);
 
-      if (Number.isFinite(count)) {
-        this.spotsActive.set(count);
+      if (Number.isFinite(countValue)) {
+        this.spotsActive.set(countValue);
       }
     } catch (error) {
       this.logger.warn(
