@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
+import { mockGarages, type MapSpot } from "./mock-garages";
 
 type MapTheme = "light" | "dark";
 type AuthMode = "login" | "signup";
@@ -21,16 +22,6 @@ type PaymentMessage = {
   tone: "success" | "warning";
   title: string;
   copy: string;
-};
-
-type MapSpot = {
-  id: string;
-  title: string;
-  address: string;
-  latitude: number;
-  longitude: number;
-  pricePerHour: number;
-  photoUrls?: string[];
 };
 
 type LeafletMapContainer = HTMLDivElement & {
@@ -55,49 +46,6 @@ const tileLayers = {
 
 const transparentTileUrl =
   "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==";
-
-const mockGarages: MapSpot[] = [
-  {
-    id: "mock-garage-central",
-    title: "Central Sofia Garage",
-    address: "ul. Graf Ignatiev 18, Sofia",
-    latitude: 42.6917,
-    longitude: 23.3256,
-    pricePerHour: 500,
-  },
-  {
-    id: "mock-garage-ndk",
-    title: "NDK Covered Parking",
-    address: "bul. Vitosha 68, Sofia",
-    latitude: 42.6869,
-    longitude: 23.3187,
-    pricePerHour: 450,
-  },
-  {
-    id: "mock-garage-alexander",
-    title: "Alexander Nevsky Spot",
-    address: "pl. Sveti Aleksandar Nevski, Sofia",
-    latitude: 42.6962,
-    longitude: 23.3328,
-    pricePerHour: 600,
-  },
-  {
-    id: "mock-garage-lozenets",
-    title: "Lozenets Private Garage",
-    address: "ul. Krichim 24, Sofia",
-    latitude: 42.6749,
-    longitude: 23.3201,
-    pricePerHour: 380,
-  },
-  {
-    id: "mock-garage-oborishte",
-    title: "Oborishte Courtyard Bay",
-    address: "ul. Oborishte 31, Sofia",
-    latitude: 42.699,
-    longitude: 23.3421,
-    pricePerHour: 420,
-  },
-];
 
 function escapeHtml(value: string) {
   return value.replace(/[&<>"']/g, (character) => {
@@ -353,8 +301,8 @@ export default function LeafletMap() {
             <span>${escapeHtml(spot.address)}</span>
             <em>${(spot.pricePerHour / 100).toFixed(2)} EUR / hour</em>
             <div>
-              <button type="button">Reserve now</button>
-              <button type="button">More info</button>
+              <a href="/bookings">Reserve now</a>
+              <a href="/spots/${encodeURIComponent(spot.id)}">More info</a>
             </div>
           </div>
         `,

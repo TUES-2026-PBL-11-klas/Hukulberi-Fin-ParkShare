@@ -350,19 +350,22 @@ body {
   padding-top: 0.25rem;
 }
 
-.garage-popup button {
+.garage-popup a {
+  display: inline-flex;
   min-height: 2rem;
+  align-items: center;
+  justify-content: center;
   border: 0;
   border-radius: 9999px;
   background: #0f172a;
   color: #ffffff;
-  cursor: default;
   font-size: 0.76rem;
   font-weight: 850;
   padding: 0 0.7rem;
+  text-decoration: none;
 }
 
-.garage-popup button + button {
+.garage-popup a + a {
   background: #ecfdf5;
   color: #006c49;
 }

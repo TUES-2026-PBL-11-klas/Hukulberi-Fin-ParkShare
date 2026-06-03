@@ -190,8 +190,12 @@ export class SpotsService {
    * Get single spot by ID
    */
   async getSpotById(id: string) {
-    const spot = await this.prisma.spot.findUnique({
-      where: { id },
+    const spot = await this.prisma.spot.findFirst({
+      where: {
+        id,
+        isActive: true,
+        verificationStatus: SpotVerificationStatus.VERIFIED,
+      },
       include: {
         hostUser: {
           select: {
