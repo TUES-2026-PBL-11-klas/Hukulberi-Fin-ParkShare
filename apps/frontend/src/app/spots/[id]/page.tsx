@@ -110,6 +110,7 @@ export default function SpotInfoPage() {
   });
   const [isLoading, setIsLoading] = useState(!spot);
   const [error, setError] = useState("");
+  const [selectedPhotoIndex, setSelectedPhotoIndex] = useState(0);
 
   useEffect(() => {
     if (!spotId || mockGarages.some((garage) => garage.id === spotId)) {
@@ -178,6 +179,8 @@ export default function SpotInfoPage() {
   }
 
   const reviews = spot.reviews ?? [];
+  const photoCount = spot.photoUrls?.length ?? 0;
+  const hasPhotos = photoCount > 0;
 
   return (
     <main className="spot-info-shell">
@@ -193,12 +196,23 @@ export default function SpotInfoPage() {
       <section className="spot-info-hero">
         <div className="spot-info-gallery">
           <div className="spot-info-gallery-main">
-            <SpotVisual spot={spot} index={0} />
+            <SpotVisual spot={spot} index={selectedPhotoIndex} />
           </div>
-          <div className="spot-info-gallery-strip">
-            <SpotVisual spot={spot} index={1} />
-            <SpotVisual spot={spot} index={2} />
-          </div>
+          {hasPhotos ? (
+            <div className="spot-info-gallery-strip" aria-label="Spot photos">
+              {Array.from({ length: photoCount }).map((_, index) => (
+                <button
+                  key={index}
+                  type="button"
+                  aria-label={`Show photo ${index + 1}`}
+                  aria-pressed={selectedPhotoIndex === index}
+                  onClick={() => setSelectedPhotoIndex(index)}
+                >
+                  <SpotVisual spot={spot} index={index} />
+                </button>
+              ))}
+            </div>
+          ) : null}
         </div>
 
         <div className="spot-hero-summary">
@@ -244,8 +258,8 @@ export default function SpotInfoPage() {
 
         <aside className="spot-info-side">
           <section className="spot-booking-panel" aria-label="Booking summary">
-            <div>
-              <span>Hourly rate</span>
+            <div className="spot-booking-rate">
+              <h2>Hourly rate</h2>
               <strong>{formatPrice(spot.pricePerHour)}</strong>
             </div>
             <p>Create a reservation hold, then continue to Stripe checkout.</p>
