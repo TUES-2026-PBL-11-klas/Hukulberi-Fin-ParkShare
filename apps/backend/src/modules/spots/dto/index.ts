@@ -7,7 +7,12 @@ import {
   Min,
   Max,
   IsBoolean,
+  IsArray,
+  IsUrl,
+  ArrayMaxSize,
+  IsIn,
 } from 'class-validator';
+import { SpotVerificationStatus } from '@prisma/client';
 
 export class CreateSpotDto {
   @IsString()
@@ -29,6 +34,12 @@ export class CreateSpotDto {
   @IsNumber()
   @Min(0)
   pricePerHour: number;
+
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(8)
+  @IsUrl({}, { each: true })
+  photoUrls?: string[];
 }
 
 export class UpdateSpotDto {
@@ -60,6 +71,12 @@ export class UpdateSpotDto {
   @IsOptional()
   @IsBoolean()
   isActive?: boolean;
+
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(8)
+  @IsUrl({}, { each: true })
+  photoUrls?: string[];
 }
 
 export class SearchSpotsDto {
@@ -95,4 +112,13 @@ export class SearchSpotsDto {
   @IsNumber()
   @Min(0)
   offset?: number = 0;
+}
+
+export class UpdateSpotVerificationDto {
+  @IsIn([SpotVerificationStatus.VERIFIED, SpotVerificationStatus.REJECTED])
+  status: SpotVerificationStatus;
+
+  @IsOptional()
+  @IsString()
+  note?: string;
 }

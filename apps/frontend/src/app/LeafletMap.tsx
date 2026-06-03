@@ -23,6 +23,16 @@ type PaymentMessage = {
   copy: string;
 };
 
+type MapSpot = {
+  id: string;
+  title: string;
+  address: string;
+  latitude: number;
+  longitude: number;
+  pricePerHour: number;
+  photoUrls?: string[];
+};
+
 type LeafletMapContainer = HTMLDivElement & {
   _leaflet_id?: number;
 };
@@ -76,7 +86,9 @@ export default function LeafletMap() {
   const leafletRef = useRef<typeof import("leaflet") | null>(null);
   const mapInstanceRef = useRef<import("leaflet").Map | null>(null);
   const tileLayerRefs = useRef<import("leaflet").TileLayer[]>([]);
+  const spotMarkerRefs = useRef<import("leaflet").Marker[]>([]);
   const [theme, setTheme] = useState<MapTheme>("light");
+  const [isMapReady, setIsMapReady] = useState(false);
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
   const [isAuthOpen, setIsAuthOpen] = useState(false);
   const [authMode, setAuthMode] = useState<AuthMode>("login");
@@ -124,6 +136,7 @@ export default function LeafletMap() {
         L.tileLayer(tileLayers.light.base, { maxZoom: 19 }).addTo(map),
         L.tileLayer(tileLayers.light.labels, { maxZoom: 19 }).addTo(map),
       ];
+      setIsMapReady(true);
     }
 
     void loadMap();
@@ -133,6 +146,8 @@ export default function LeafletMap() {
       mapInstanceRef.current?.remove();
       mapInstanceRef.current = null;
       tileLayerRefs.current = [];
+      spotMarkerRefs.current = [];
+      setIsMapReady(false);
     };
   }, []);
 
@@ -150,6 +165,81 @@ export default function LeafletMap() {
       L.tileLayer(tileLayers[theme].labels, { maxZoom: 19 }).addTo(map),
     ];
   }, [theme]);
+
+  useEffect(() => {
+    const L = leafletRef.current;
+    const map = mapInstanceRef.current;
+
+    if (!L || !map || !isMapReady) {
+      return;
+    }
+
+    let isDisposed = false;
+
+    function escapeHtml(value: string) {
+      return value.replace(/[&<>"']/g, (character) => {
+        const entities: Record<string, string> = {
+          "&": "&amp;",
+          "<": "&lt;",
+          ">": "&gt;",
+          '"': "&quot;",
+          "'": "&#039;",
+        };
+        return entities[character];
+      });
+    }
+
+    async function loadSpotMarkers() {
+      const leaflet = L as typeof import("leaflet");
+      const leafletMap = map as import("leaflet").Map;
+
+      try {
+        const response = await fetch(`${apiBaseUrl}/api/v1/spots?limit=100`);
+
+        if (!response.ok) {
+          return;
+        }
+
+        const payload = (await response.json()) as { data?: MapSpot[] };
+        const spots = payload.data ?? [];
+
+        if (isDisposed) {
+          return;
+        }
+
+        spotMarkerRefs.current.forEach((marker) => marker.remove());
+        spotMarkerRefs.current = spots.map((spot) => {
+          const marker = leaflet.marker([spot.latitude, spot.longitude], {
+            icon: leaflet.divIcon({
+              className: "parkshare-map-marker",
+              html: `<span>${(spot.pricePerHour / 100).toFixed(0)}€</span>`,
+              iconSize: [58, 38],
+              iconAnchor: [29, 38],
+              popupAnchor: [0, -34],
+            }),
+          }).addTo(leafletMap);
+
+          marker.bindPopup(`
+            <strong>${escapeHtml(spot.title)}</strong>
+            <span>${escapeHtml(spot.address)}</span>
+            <a href="/marketplace/${encodeURIComponent(spot.id)}">View spot</a>
+          `);
+
+          return marker;
+        });
+      } catch {
+        // Map markers are helpful, but the map itself should stay usable offline.
+      }
+    }
+
+    void loadSpotMarkers();
+
+    return () => {
+      isDisposed = true;
+      spotMarkerRefs.current.forEach((marker) => marker.remove());
+      spotMarkerRefs.current = [];
+    };
+  }, [isMapReady]);
 
   useEffect(() => {
     const accessToken = localStorage.getItem("parkshare_access_token");
@@ -294,7 +384,7 @@ export default function LeafletMap() {
         <button
           type="button"
           className="map-primary-action"
-          onClick={() => router.push("/bookings")}
+          onClick={() => router.push("/marketplace")}
         >
           <svg
             aria-hidden="true"
@@ -311,7 +401,11 @@ export default function LeafletMap() {
           </svg>
           <span>Search</span>
         </button>
-        <button type="button" className="map-primary-action">
+        <button
+          type="button"
+          className="map-primary-action"
+          onClick={() => router.push("/bookings")}
+        >
           <svg
             aria-hidden="true"
             viewBox="0 0 24 24"
@@ -331,7 +425,11 @@ export default function LeafletMap() {
           </svg>
           <span>Reservations</span>
         </button>
-        <button type="button" className="map-primary-action">
+        <button
+          type="button"
+          className="map-primary-action"
+          onClick={() => router.push("/marketplace/create")}
+        >
           <svg
             aria-hidden="true"
             viewBox="0 0 24 24"

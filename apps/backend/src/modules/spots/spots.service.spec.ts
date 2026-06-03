@@ -64,6 +64,8 @@ describe('SpotsService', () => {
         data: {
           hostUserId: 'user-1',
           ...spotData,
+          photoUrls: [],
+          verificationStatus: 'PENDING',
         },
         include: {
           hostUser: {
