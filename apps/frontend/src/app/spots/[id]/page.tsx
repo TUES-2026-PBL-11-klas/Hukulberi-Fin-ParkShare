@@ -4,7 +4,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { useParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
-import { Calendar, Car, CheckCircle2, Clock, MapPin, ShieldCheck, Star } from "lucide-react";
+import { MapPin, Star } from "lucide-react";
 import { mockGarages, type MapSpot } from "../../mock-garages";
 import "./spot-info.css";
 
@@ -25,11 +25,23 @@ type SpotDetails = MapSpot & {
     startAt: string;
     endAt: string;
   }>;
+  reviews?: Array<{
+    id: string;
+    rating: "ONE" | "TWO" | "THREE" | "FOUR" | "FIVE";
+    comment?: string | null;
+    createdAt?: string;
+    author?: {
+      id?: string;
+      name: string;
+    };
+  }>;
 };
 
 type ApiErrorResponse = {
   message?: string | string[];
 };
+
+type ReviewRatingValue = NonNullable<SpotDetails["reviews"]>[number]["rating"];
 
 function readErrorMessage(payload: unknown): string {
   if (typeof payload === "object" && payload !== null && "message" in payload) {
@@ -53,6 +65,18 @@ function formatPrice(cents: number): string {
     currencyDisplay: "code",
     style: "currency",
   }).format(cents / 100);
+}
+
+function ratingToNumber(rating: ReviewRatingValue): number {
+  const ratingMap = {
+    ONE: 1,
+    TWO: 2,
+    THREE: 3,
+    FOUR: 4,
+    FIVE: 5,
+  } satisfies Record<ReviewRatingValue, number>;
+
+  return ratingMap[rating];
 }
 
 function SpotVisual({ spot, index }: { spot: SpotDetails; index: number }) {
@@ -123,7 +147,7 @@ export default function SpotInfoPage() {
 
   const ratingLabel = useMemo(() => {
     if (!spot?.averageRating || !spot.reviewCount) {
-      return "New listing";
+      return "No reviews yet";
     }
 
     return `${spot.averageRating.toFixed(1)} (${spot.reviewCount} reviews)`;
@@ -153,6 +177,8 @@ export default function SpotInfoPage() {
     );
   }
 
+  const reviews = spot.reviews ?? [];
+
   return (
     <main className="spot-info-shell">
       <header className="spot-info-topbar">
@@ -175,18 +201,7 @@ export default function SpotInfoPage() {
           </div>
         </div>
 
-        <aside className="spot-booking-panel" aria-label="Booking summary">
-          <div>
-            <span>Hourly rate</span>
-            <strong>{formatPrice(spot.pricePerHour)}</strong>
-          </div>
-          <p>Choose this spot in reservations to create a hold and continue to Stripe checkout.</p>
-          <Link href="/bookings">Reserve now</Link>
-        </aside>
-      </section>
-
-      <section className="spot-info-layout">
-        <article className="spot-info-main">
+        <div className="spot-hero-summary">
           <div className="spot-title-block">
             <h1>{spot.title}</h1>
             <p>
@@ -195,21 +210,18 @@ export default function SpotInfoPage() {
             </p>
           </div>
 
-          <div className="spot-info-facts" aria-label="Spot facts">
+          <div className="spot-summary-row">
             <span>
               <Star aria-hidden="true" />
               {ratingLabel}
             </span>
-            <span>
-              <ShieldCheck aria-hidden="true" />
-              Admin verified
-            </span>
-            <span>
-              <Car aria-hidden="true" />
-              Private garage
-            </span>
+            <strong>{formatPrice(spot.pricePerHour)} / hour</strong>
           </div>
+        </div>
+      </section>
 
+      <section className="spot-info-layout">
+        <article className="spot-info-main">
           <section className="spot-info-section">
             <h2>About this spot</h2>
             <p>
@@ -231,6 +243,15 @@ export default function SpotInfoPage() {
         </article>
 
         <aside className="spot-info-side">
+          <section className="spot-booking-panel" aria-label="Booking summary">
+            <div>
+              <span>Hourly rate</span>
+              <strong>{formatPrice(spot.pricePerHour)}</strong>
+            </div>
+            <p>Create a reservation hold, then continue to Stripe checkout.</p>
+            <Link href="/bookings">Reserve now</Link>
+          </section>
+
           <section>
             <h2>Host</h2>
             <div className="spot-host-card">
@@ -241,25 +262,33 @@ export default function SpotInfoPage() {
               </div>
             </div>
           </section>
-
-          <section>
-            <h2>Good to know</h2>
-            <ul className="spot-info-list">
-              <li>
-                <CheckCircle2 aria-hidden="true" />
-                Admin verification required before public bookings
-              </li>
-              <li>
-                <Clock aria-hidden="true" />
-                Booking holds expire before payment
-              </li>
-              <li>
-                <Calendar aria-hidden="true" />
-                Confirmed bookings block unavailable times
-              </li>
-            </ul>
-          </section>
         </aside>
+      </section>
+
+      <section className="spot-reviews">
+        <div className="spot-reviews-heading">
+          <h2>Reviews</h2>
+          <span>{ratingLabel}</span>
+        </div>
+
+        {reviews.length > 0 ? (
+          <div className="spot-review-grid">
+            {reviews.slice(0, 4).map((review) => (
+              <article key={review.id} className="spot-review-card">
+                <div>
+                  <strong>{review.author?.name || "ParkShare driver"}</strong>
+                  <span>{ratingToNumber(review.rating)}.0 / 5</span>
+                </div>
+                <p>{review.comment || "No written comment."}</p>
+              </article>
+            ))}
+          </div>
+        ) : (
+          <div className="spot-review-empty">
+            <Star aria-hidden="true" />
+            <p>No reviews yet. After completed bookings, driver reviews will appear here.</p>
+          </div>
+        )}
       </section>
     </main>
   );
