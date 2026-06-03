@@ -8,9 +8,9 @@ import {
   Max,
   IsBoolean,
   IsArray,
-  IsUrl,
   ArrayMaxSize,
   IsIn,
+  MaxLength,
 } from 'class-validator';
 import { SpotVerificationStatus } from '@prisma/client';
 
@@ -37,8 +37,9 @@ export class CreateSpotDto {
 
   @IsOptional()
   @IsArray()
-  @ArrayMaxSize(8)
-  @IsUrl({}, { each: true })
+  @ArrayMaxSize(6)
+  @IsString({ each: true })
+  @MaxLength(1500000, { each: true })
   photoUrls?: string[];
 }
 
@@ -74,8 +75,9 @@ export class UpdateSpotDto {
 
   @IsOptional()
   @IsArray()
-  @ArrayMaxSize(8)
-  @IsUrl({}, { each: true })
+  @ArrayMaxSize(6)
+  @IsString({ each: true })
+  @MaxLength(1500000, { each: true })
   photoUrls?: string[];
 }
 

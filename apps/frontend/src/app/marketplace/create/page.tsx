@@ -13,7 +13,6 @@ type ListingForm = {
   latitude: string;
   longitude: string;
   pricePerHour: string;
-  photoInput: string;
   photoUrls: string[];
 };
 
@@ -22,6 +21,8 @@ type LeafletMapContainer = HTMLDivElement & {
 };
 
 const defaultCenter: [number, number] = [42.6977, 23.3219];
+const maxPhotos = 6;
+const maxPhotoSizeBytes = 1_200_000;
 
 export default function CreateSpotPage() {
   const router = useRouter();
@@ -30,7 +31,6 @@ export default function CreateSpotPage() {
   const pinRef = useRef<import('leaflet').Marker | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
   const [formData, setFormData] = useState<ListingForm>({
     title: '',
     description: '',
@@ -38,7 +38,6 @@ export default function CreateSpotPage() {
     latitude: defaultCenter[0].toString(),
     longitude: defaultCenter[1].toString(),
     pricePerHour: '',
-    photoInput: '',
     photoUrls: [],
   });
 
@@ -71,7 +70,17 @@ export default function CreateSpotPage() {
         { maxZoom: 19 },
       ).addTo(map);
 
-      const pin = L.marker(defaultCenter, { draggable: true }).addTo(map);
+      const pinIcon = L.divIcon({
+        className: 'listing-pin-icon',
+        html: '<span aria-hidden="true"></span>',
+        iconSize: [42, 50],
+        iconAnchor: [21, 48],
+      });
+
+      const pin = L.marker(defaultCenter, {
+        draggable: true,
+        icon: pinIcon,
+      }).addTo(map);
 
       function setCoordinates(latitude: number, longitude: number) {
         setFormData((prev) => ({
@@ -142,7 +151,6 @@ export default function CreateSpotPage() {
           longitude: nextLongitude.toFixed(6),
         }));
         mapInstanceRef.current?.setView([nextLatitude, nextLongitude], 17);
-        setNotice('Location pinned from your device. You can drag the marker to fine tune it.');
       },
       (geoError) => {
         setError(`Geolocation error: ${geoError.message}`);
@@ -151,29 +159,47 @@ export default function CreateSpotPage() {
     );
   }
 
-  function addPhotoUrl() {
-    const nextUrl = formData.photoInput.trim();
+  async function handlePhotoFiles(event: React.ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(event.target.files ?? []);
+    event.target.value = '';
 
-    if (!nextUrl) {
+    if (files.length === 0) {
       return;
     }
 
-    try {
-      const parsed = new URL(nextUrl);
+    const remainingSlots = maxPhotos - formData.photoUrls.length;
 
-      if (!['http:', 'https:'].includes(parsed.protocol)) {
-        throw new Error();
-      }
-    } catch {
-      setError('Photo must be a valid http or https URL.');
+    if (remainingSlots <= 0) {
+      setError(`You can add up to ${maxPhotos} photos.`);
       return;
     }
+
+    const selectedFiles = files.slice(0, remainingSlots);
+    const invalidFile = selectedFiles.find(
+      (file) => !file.type.startsWith('image/') || file.size > maxPhotoSizeBytes,
+    );
+
+    if (invalidFile) {
+      setError('Choose image files under 1.2 MB each.');
+      return;
+    }
+
+    const dataUrls = await Promise.all(
+      selectedFiles.map(
+        (file) =>
+          new Promise<string>((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve(String(reader.result));
+            reader.onerror = () => reject(new Error('Could not read image file.'));
+            reader.readAsDataURL(file);
+          }),
+      ),
+    );
 
     setError(null);
     setFormData((prev) => ({
       ...prev,
-      photoInput: '',
-      photoUrls: [...prev.photoUrls, nextUrl].slice(0, 8),
+      photoUrls: [...prev.photoUrls, ...dataUrls].slice(0, maxPhotos),
     }));
   }
 
@@ -188,7 +214,6 @@ export default function CreateSpotPage() {
     event.preventDefault();
     setLoading(true);
     setError(null);
-    setNotice(null);
 
     try {
       const accessToken = localStorage.getItem('parkshare_access_token');
@@ -258,29 +283,26 @@ export default function CreateSpotPage() {
 
   return (
     <main className="create-spot-shell">
-      <section className="create-spot-hero">
-        <Link href="/" className="create-spot-back">
-          Back to map
-        </Link>
-        <div>
-          <p className="create-spot-eyebrow">Host listing</p>
-          <h1>List your garage with a precise map pin</h1>
-          <p>
-            Add the details drivers need, pin the exact entrance, and include photos
-            for admin verification before the spot appears publicly.
-          </p>
-        </div>
-      </section>
+      <form onSubmit={handleSubmit} className="listing-workspace">
+        <div className="listing-map-picker" ref={mapRef} aria-label="Choose spot location" />
 
-      <form onSubmit={handleSubmit} className="create-spot-layout">
-        <section className="create-spot-panel">
-          {error ? <div className="listing-alert listing-alert-error">{error}</div> : null}
-          {notice ? <div className="listing-alert listing-alert-info">{notice}</div> : null}
+        <header className="listing-topbar">
+          <Link href="/" className="create-spot-back">
+            Back
+          </Link>
+          <h1>Create parking listing</h1>
+          <button type="submit" className="submit-btn" disabled={loading}>
+            {loading ? 'Submitting...' : 'Submit'}
+          </button>
+        </header>
 
-          <div className="form-section">
-            <h2>Spot details</h2>
+        {error ? <div className="listing-alert listing-alert-error">{error}</div> : null}
+
+        <aside className="listing-drawer">
+          <section className="form-section">
+            <h2>Spot</h2>
             <label className="form-group" htmlFor="title">
-              <span>Listing title</span>
+              <span>Title</span>
               <input
                 id="title"
                 type="text"
@@ -299,14 +321,34 @@ export default function CreateSpotPage() {
                 name="description"
                 value={formData.description}
                 onChange={handleInputChange}
-                placeholder="Mention gate access, ceiling height, lighting, security, and nearby landmarks."
-                rows={5}
+                placeholder="Gate access, ceiling height, lighting, landmarks"
+                rows={4}
               />
             </label>
-          </div>
 
-          <div className="form-section">
-            <h2>Location</h2>
+            <div className="drawer-row">
+              <label className="form-group" htmlFor="pricePerHour">
+                <span>EUR / hour</span>
+                <input
+                  id="pricePerHour"
+                  type="number"
+                  name="pricePerHour"
+                  value={formData.pricePerHour}
+                  onChange={handleInputChange}
+                  placeholder="5.00"
+                  step="0.01"
+                  min="0.01"
+                  required
+                />
+              </label>
+              <button type="button" onClick={handleGeolocation} className="secondary-action">
+                Locate
+              </button>
+            </div>
+          </section>
+
+          <section className="form-section">
+            <h2>Entrance</h2>
             <label className="form-group" htmlFor="address">
               <span>Address</span>
               <input
@@ -320,11 +362,9 @@ export default function CreateSpotPage() {
               />
             </label>
 
-            <div className="listing-map-picker" ref={mapRef} aria-label="Choose spot location" />
-
-            <div className="coordinates-group">
+            <div className="coordinate-grid">
               <label className="form-group" htmlFor="latitude">
-                <span>Latitude</span>
+                <span>Lat</span>
                 <input
                   id="latitude"
                   type="number"
@@ -336,7 +376,7 @@ export default function CreateSpotPage() {
                 />
               </label>
               <label className="form-group" htmlFor="longitude">
-                <span>Longitude</span>
+                <span>Lng</span>
                 <input
                   id="longitude"
                   type="number"
@@ -348,84 +388,41 @@ export default function CreateSpotPage() {
                 />
               </label>
             </div>
-
-            <button type="button" onClick={handleGeolocation} className="secondary-action">
-              Use my current location
-            </button>
-          </div>
-        </section>
-
-        <aside className="create-spot-panel create-spot-side">
-          <div className="form-section">
-            <h2>Pricing</h2>
-            <label className="form-group" htmlFor="pricePerHour">
-              <span>Price per hour</span>
-              <input
-                id="pricePerHour"
-                type="number"
-                name="pricePerHour"
-                value={formData.pricePerHour}
-                onChange={handleInputChange}
-                placeholder="5.00"
-                step="0.01"
-                min="0.01"
-                required
-              />
-            </label>
-          </div>
-
-          <div className="form-section">
-            <h2>Photos</h2>
-            <div className="photo-url-row">
-              <label className="form-group" htmlFor="photoInput">
-                <span>Photo URL</span>
-                <input
-                  id="photoInput"
-                  type="url"
-                  name="photoInput"
-                  value={formData.photoInput}
-                  onChange={handleInputChange}
-                  placeholder="https://..."
-                />
-              </label>
-              <button type="button" onClick={addPhotoUrl} className="secondary-action">
-                Add
-              </button>
-            </div>
-
-            {formData.photoUrls.length > 0 ? (
-              <div className="photo-preview-grid">
-                {formData.photoUrls.map((url) => (
-                  <figure key={url} className="photo-preview">
-                    <img src={url} alt="Parking spot preview" />
-                    <button type="button" onClick={() => removePhotoUrl(url)}>
-                      Remove
-                    </button>
-                  </figure>
-                ))}
-              </div>
-            ) : (
-              <p className="form-hint">Add real photos of the entrance, parking bay, and access gate.</p>
-            )}
-          </div>
-
-          <div className="verification-note">
-            <strong>Admin verification</strong>
-            <p>
-              New listings are saved as pending. An admin should check the address,
-              coordinates, photos, and host details before marking the spot verified.
-            </p>
-          </div>
-
-          <div className="form-actions">
-            <Link href="/" className="cancel-btn">
-              Cancel
-            </Link>
-            <button type="submit" className="submit-btn" disabled={loading}>
-              {loading ? 'Submitting...' : 'Submit for verification'}
-            </button>
-          </div>
+          </section>
         </aside>
+
+        <section className="photo-rail" aria-label="Parking spot photos">
+          <label className="photo-upload" htmlFor="photoFiles">
+            <input
+              id="photoFiles"
+              type="file"
+              accept="image/png,image/jpeg,image/webp"
+              multiple
+              onChange={handlePhotoFiles}
+            />
+            <span className="photo-upload-icon" aria-hidden="true"></span>
+            <strong>Photos</strong>
+          </label>
+
+          {formData.photoUrls.length > 0 ? (
+            <div className="photo-preview-grid">
+              {formData.photoUrls.map((url) => (
+                <figure key={url} className="photo-preview">
+                  <img src={url} alt="Parking spot preview" />
+                  <button type="button" onClick={() => removePhotoUrl(url)}>
+                    Remove
+                  </button>
+                </figure>
+              ))}
+            </div>
+          ) : (
+            <div className="photo-empty" aria-hidden="true">
+              <span></span>
+              <span></span>
+              <span></span>
+            </div>
+          )}
+        </section>
       </form>
     </main>
   );
