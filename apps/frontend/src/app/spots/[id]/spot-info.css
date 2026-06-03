@@ -226,7 +226,7 @@
 .spot-info-main {
   display: grid;
   align-content: start;
-  gap: 2rem;
+  gap: 4.75rem;
 }
 
 .spot-title-block h1 {
