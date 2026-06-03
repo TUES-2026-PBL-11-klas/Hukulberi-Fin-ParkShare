@@ -67,6 +67,7 @@ export class SpotsService {
         hostUserId,
         ...createSpotDto,
         photoUrls: createSpotDto.photoUrls ?? [],
+        isActive: false,
         verificationStatus: SpotVerificationStatus.PENDING,
       },
       include: {
@@ -95,9 +96,7 @@ export class SpotsService {
     // Build where clause
     const where: any = {
       isActive: true,
-      verificationStatus: {
-        in: [SpotVerificationStatus.VERIFIED, SpotVerificationStatus.PENDING],
-      },
+      verificationStatus: SpotVerificationStatus.VERIFIED,
     };
 
     // Text search on title/description/address

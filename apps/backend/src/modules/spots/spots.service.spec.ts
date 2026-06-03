@@ -49,7 +49,7 @@ describe('SpotsService', () => {
         id: '1',
         hostUserId: 'user-1',
         ...spotData,
-        isActive: true,
+        isActive: false,
         createdAt: new Date(),
         updatedAt: new Date(),
         hostUser: { id: 'user-1', name: 'Test Host' },
@@ -65,6 +65,7 @@ describe('SpotsService', () => {
           hostUserId: 'user-1',
           ...spotData,
           photoUrls: [],
+          isActive: false,
           verificationStatus: 'PENDING',
         },
         include: {
