@@ -172,14 +172,12 @@ body {
   transform: translateX(-50%);
   flex-direction: column;
   gap: 0.65rem;
-  border: 1px solid var(--map-glass-border);
+  border: 1px solid var(--map-panel-border);
   border-radius: 1.25rem;
-  background: var(--map-glass-bg);
+  background: var(--map-panel-bg);
   color: var(--map-control-text);
   padding: 0.65rem;
   box-shadow: var(--map-control-shadow);
-  backdrop-filter: blur(18px) saturate(150%);
-  -webkit-backdrop-filter: blur(18px) saturate(150%);
 }
 
 .map-search-field {
@@ -900,6 +898,8 @@ body {
   --map-control-bg: rgb(255 255 255 / 0.9);
   --map-glass-bg: rgb(255 255 255 / 0.66);
   --map-glass-border: rgb(255 255 255 / 0.54);
+  --map-panel-bg: #ffffff;
+  --map-panel-border: rgb(203 213 225 / 0.8);
   --map-dialog-bg: rgb(255 255 255 / 0.94);
   --map-control-text: #0f172a;
   --map-muted-text: #64748b;
@@ -918,6 +918,8 @@ body {
   --map-control-bg: rgb(15 23 42 / 0.86);
   --map-glass-bg: rgb(15 23 42 / 0.58);
   --map-glass-border: rgb(255 255 255 / 0.14);
+  --map-panel-bg: #0f172a;
+  --map-panel-border: rgb(255 255 255 / 0.14);
   --map-dialog-bg: rgb(15 23 42 / 0.92);
   --map-control-text: #f8fafc;
   --map-muted-text: #cbd5e1;
