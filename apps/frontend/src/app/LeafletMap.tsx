@@ -53,6 +53,62 @@ const tileLayers = {
   },
 } satisfies Record<MapTheme, { base: string; labels: string }>;
 
+const mockGarages: MapSpot[] = [
+  {
+    id: "mock-garage-central",
+    title: "Central Sofia Garage",
+    address: "ul. Graf Ignatiev 18, Sofia",
+    latitude: 42.6917,
+    longitude: 23.3256,
+    pricePerHour: 500,
+  },
+  {
+    id: "mock-garage-ndk",
+    title: "NDK Covered Parking",
+    address: "bul. Vitosha 68, Sofia",
+    latitude: 42.6869,
+    longitude: 23.3187,
+    pricePerHour: 450,
+  },
+  {
+    id: "mock-garage-alexander",
+    title: "Alexander Nevsky Spot",
+    address: "pl. Sveti Aleksandar Nevski, Sofia",
+    latitude: 42.6962,
+    longitude: 23.3328,
+    pricePerHour: 600,
+  },
+  {
+    id: "mock-garage-lozenets",
+    title: "Lozenets Private Garage",
+    address: "ul. Krichim 24, Sofia",
+    latitude: 42.6749,
+    longitude: 23.3201,
+    pricePerHour: 380,
+  },
+  {
+    id: "mock-garage-oborishte",
+    title: "Oborishte Courtyard Bay",
+    address: "ul. Oborishte 31, Sofia",
+    latitude: 42.699,
+    longitude: 23.3421,
+    pricePerHour: 420,
+  },
+];
+
+function escapeHtml(value: string) {
+  return value.replace(/[&<>"']/g, (character) => {
+    const entities: Record<string, string> = {
+      "&": "&amp;",
+      "<": "&lt;",
+      ">": "&gt;",
+      '"': "&quot;",
+      "'": "&#039;",
+    };
+    return entities[character];
+  });
+}
+
 function readInitialPaymentMessage(): PaymentMessage | null {
   if (typeof window === "undefined") {
     return null;
@@ -77,6 +133,14 @@ function readInitialPaymentMessage(): PaymentMessage | null {
     };
   }
 
+  if (params.get("listing") === "pending") {
+    return {
+      tone: "success",
+      title: "Listing submitted",
+      copy: "Your parking spot is waiting for admin verification.",
+    };
+  }
+
   return null;
 }
 
@@ -90,6 +154,9 @@ export default function LeafletMap() {
   const [theme, setTheme] = useState<MapTheme>("light");
   const [isMapReady, setIsMapReady] = useState(false);
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const [garageSearch, setGarageSearch] = useState("");
+  const [mapSpots, setMapSpots] = useState<MapSpot[]>(mockGarages);
   const [isAuthOpen, setIsAuthOpen] = useState(false);
   const [authMode, setAuthMode] = useState<AuthMode>("login");
   const [authName, setAuthName] = useState("");
@@ -167,32 +234,13 @@ export default function LeafletMap() {
   }, [theme]);
 
   useEffect(() => {
-    const L = leafletRef.current;
-    const map = mapInstanceRef.current;
-
-    if (!L || !map || !isMapReady) {
+    if (!isMapReady) {
       return;
     }
 
     let isDisposed = false;
 
-    function escapeHtml(value: string) {
-      return value.replace(/[&<>"']/g, (character) => {
-        const entities: Record<string, string> = {
-          "&": "&amp;",
-          "<": "&lt;",
-          ">": "&gt;",
-          '"': "&quot;",
-          "'": "&#039;",
-        };
-        return entities[character];
-      });
-    }
-
     async function loadSpotMarkers() {
-      const leaflet = L as typeof import("leaflet");
-      const leafletMap = map as import("leaflet").Map;
-
       try {
         const response = await fetch(`${apiBaseUrl}/api/v1/spots?limit=100`);
 
@@ -201,32 +249,13 @@ export default function LeafletMap() {
         }
 
         const payload = (await response.json()) as { data?: MapSpot[] };
-        const spots = payload.data ?? [];
+        const backendSpots = payload.data ?? [];
 
         if (isDisposed) {
           return;
         }
 
-        spotMarkerRefs.current.forEach((marker) => marker.remove());
-        spotMarkerRefs.current = spots.map((spot) => {
-          const marker = leaflet.marker([spot.latitude, spot.longitude], {
-            icon: leaflet.divIcon({
-              className: "parkshare-map-marker",
-              html: `<span>${(spot.pricePerHour / 100).toFixed(0)}€</span>`,
-              iconSize: [58, 38],
-              iconAnchor: [29, 38],
-              popupAnchor: [0, -34],
-            }),
-          }).addTo(leafletMap);
-
-          marker.bindPopup(`
-            <strong>${escapeHtml(spot.title)}</strong>
-            <span>${escapeHtml(spot.address)}</span>
-            <a href="/marketplace/${encodeURIComponent(spot.id)}">View spot</a>
-          `);
-
-          return marker;
-        });
+        setMapSpots([...backendSpots, ...mockGarages]);
       } catch {
         // Map markers are helpful, but the map itself should stay usable offline.
       }
@@ -236,11 +265,53 @@ export default function LeafletMap() {
 
     return () => {
       isDisposed = true;
-      spotMarkerRefs.current.forEach((marker) => marker.remove());
-      spotMarkerRefs.current = [];
     };
   }, [isMapReady]);
 
+  useEffect(() => {
+    const L = leafletRef.current;
+    const map = mapInstanceRef.current;
+
+    if (!L || !map || !isMapReady) {
+      return;
+    }
+
+    spotMarkerRefs.current.forEach((marker) => marker.remove());
+    spotMarkerRefs.current = mapSpots.map((spot) => {
+      const marker = L.marker([spot.latitude, spot.longitude], {
+        icon: L.divIcon({
+          className: "parkshare-map-marker",
+          html: `<span>${(spot.pricePerHour / 100).toFixed(0)} EUR</span>`,
+          iconSize: [70, 38],
+          iconAnchor: [35, 38],
+          popupAnchor: [0, -34],
+        }),
+      }).addTo(map);
+
+      marker.bindPopup(
+        `
+          <div class="garage-popup">
+            <strong>${escapeHtml(spot.title)}</strong>
+            <span>${escapeHtml(spot.address)}</span>
+            <em>${(spot.pricePerHour / 100).toFixed(2)} EUR / hour</em>
+            <div>
+              <button type="button">Reserve now</button>
+              <button type="button">More info</button>
+            </div>
+          </div>
+        `,
+        { closeButton: true, maxWidth: 260 },
+      );
+
+      marker.on("mouseover", () => marker.openPopup());
+      return marker;
+    });
+
+    return () => {
+      spotMarkerRefs.current.forEach((marker) => marker.remove());
+      spotMarkerRefs.current = [];
+    };
+  }, [isMapReady, mapSpots]);
   useEffect(() => {
     const accessToken = localStorage.getItem("parkshare_access_token");
 
@@ -279,8 +350,9 @@ export default function LeafletMap() {
       queueMicrotask(() => setPaymentMessage(initialPaymentMessage));
     }
 
-    if (params.has("payment")) {
+    if (params.has("payment") || params.has("listing")) {
       params.delete("payment");
+      params.delete("listing");
       const queryString = params.toString();
       const replacementUrl = `${window.location.pathname}${
         queryString ? `?${queryString}` : ""
@@ -290,6 +362,16 @@ export default function LeafletMap() {
   }, []);
 
   const nextTheme = theme === "dark" ? "light" : "dark";
+  const normalizedGarageSearch = garageSearch.trim().toLowerCase();
+  const visibleGarageResults = normalizedGarageSearch
+    ? mapSpots
+        .filter((spot) =>
+          `${spot.title} ${spot.address}`
+            .toLowerCase()
+            .includes(normalizedGarageSearch),
+        )
+        .slice(0, 8)
+    : mapSpots.slice(0, 3);
 
   function openAuth(mode: AuthMode) {
     setIsProfileMenuOpen(false);
@@ -384,7 +466,11 @@ export default function LeafletMap() {
         <button
           type="button"
           className="map-primary-action"
-          onClick={() => router.push("/marketplace")}
+          aria-expanded={isSearchOpen}
+          onClick={() => {
+            setIsSearchOpen((isOpen) => !isOpen);
+            setGarageSearch("");
+          }}
         >
           <svg
             aria-hidden="true"
@@ -447,6 +533,52 @@ export default function LeafletMap() {
           <span>List garage</span>
         </button>
       </nav>
+      {isSearchOpen ? (
+        <section className="map-search-panel" aria-label="Garage search">
+          <label className="map-search-field">
+            <svg
+              aria-hidden="true"
+              viewBox="0 0 24 24"
+              className="h-5 w-5"
+              fill="none"
+              stroke="currentColor"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth="2"
+            >
+              <circle cx="11" cy="11" r="7" />
+              <path d="m20 20-3.5-3.5" />
+            </svg>
+            <input
+              type="search"
+              placeholder="Search garages by name"
+              value={garageSearch}
+              onChange={(event) => setGarageSearch(event.target.value)}
+              autoFocus
+            />
+          </label>
+          <div className="map-search-results">
+            {visibleGarageResults.length > 0 ? (
+              visibleGarageResults.map((spot) => (
+                <button
+                  key={spot.id}
+                  type="button"
+                  className="map-search-result"
+                  onClick={() => undefined}
+                >
+                  <span>
+                    <strong>{spot.title}</strong>
+                    <small>{spot.address}</small>
+                  </span>
+                  <b>{(spot.pricePerHour / 100).toFixed(2)} EUR/h</b>
+                </button>
+              ))
+            ) : (
+              <p className="map-search-empty">No garages match that search.</p>
+            )}
+          </div>
+        </section>
+      ) : null}
       {paymentMessage ? (
         <section
           className={`map-payment-toast map-payment-toast-${paymentMessage.tone}`}

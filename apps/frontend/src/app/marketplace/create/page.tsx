@@ -64,8 +64,10 @@ export default function CreateSpotPage() {
 
       const map = L.map(mapContainer, {
         attributionControl: false,
-        zoomControl: true,
+        zoomControl: false,
       }).setView(defaultCenter, 13);
+
+      L.control.zoom({ position: 'bottomright' }).addTo(map);
 
       L.tileLayer(
         'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
@@ -297,8 +299,7 @@ export default function CreateSpotPage() {
         );
       }
 
-      const newSpot = payload as { id: string };
-      router.push(`/marketplace/${newSpot.id}?created=pending`);
+      router.push('/?listing=pending');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred.');
     } finally {

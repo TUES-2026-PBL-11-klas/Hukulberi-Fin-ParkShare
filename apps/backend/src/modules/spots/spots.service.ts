@@ -95,7 +95,9 @@ export class SpotsService {
     // Build where clause
     const where: any = {
       isActive: true,
-      verificationStatus: SpotVerificationStatus.VERIFIED,
+      verificationStatus: {
+        in: [SpotVerificationStatus.VERIFIED, SpotVerificationStatus.PENDING],
+      },
     };
 
     // Text search on title/description/address
