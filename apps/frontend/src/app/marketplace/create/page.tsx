@@ -22,7 +22,9 @@ type LeafletMapContainer = HTMLDivElement & {
 
 const defaultCenter: [number, number] = [42.6977, 23.3219];
 const maxPhotos = 6;
-const maxPhotoSizeBytes = 1_200_000;
+const maxPhotoSizeBytes = 4_000_000;
+const photoMaxSidePx = 1200;
+const photoQuality = 0.74;
 
 export default function CreateSpotPage() {
   const router = useRouter();
@@ -184,23 +186,46 @@ export default function CreateSpotPage() {
       return;
     }
 
-    const dataUrls = await Promise.all(
-      selectedFiles.map(
-        (file) =>
-          new Promise<string>((resolve, reject) => {
-            const reader = new FileReader();
-            reader.onload = () => resolve(String(reader.result));
-            reader.onerror = () => reject(new Error('Could not read image file.'));
-            reader.readAsDataURL(file);
-          }),
-      ),
-    );
+    const dataUrls = await Promise.all(selectedFiles.map(compressImageFile));
 
     setError(null);
     setFormData((prev) => ({
       ...prev,
       photoUrls: [...prev.photoUrls, ...dataUrls].slice(0, maxPhotos),
     }));
+  }
+
+  async function compressImageFile(file: File): Promise<string> {
+    const imageUrl = URL.createObjectURL(file);
+
+    try {
+      const image = await new Promise<HTMLImageElement>((resolve, reject) => {
+        const nextImage = new Image();
+        nextImage.onload = () => resolve(nextImage);
+        nextImage.onerror = () => reject(new Error('Could not read image file.'));
+        nextImage.src = imageUrl;
+      });
+
+      const scale = Math.min(
+        1,
+        photoMaxSidePx / Math.max(image.naturalWidth, image.naturalHeight),
+      );
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.max(1, Math.round(image.naturalWidth * scale));
+      canvas.height = Math.max(1, Math.round(image.naturalHeight * scale));
+
+      const context = canvas.getContext('2d');
+
+      if (!context) {
+        throw new Error('Could not prepare image preview.');
+      }
+
+      context.drawImage(image, 0, 0, canvas.width, canvas.height);
+
+      return canvas.toDataURL('image/jpeg', photoQuality);
+    } finally {
+      URL.revokeObjectURL(imageUrl);
+    }
   }
 
   function removePhotoUrl(url: string) {
@@ -401,7 +426,8 @@ export default function CreateSpotPage() {
               onChange={handlePhotoFiles}
             />
             <span className="photo-upload-icon" aria-hidden="true"></span>
-            <strong>Photos</strong>
+            <strong>Add photos</strong>
+            <small>PNG, JPG, or WebP</small>
           </label>
 
           {formData.photoUrls.length > 0 ? (
@@ -415,13 +441,7 @@ export default function CreateSpotPage() {
                 </figure>
               ))}
             </div>
-          ) : (
-            <div className="photo-empty" aria-hidden="true">
-              <span></span>
-              <span></span>
-              <span></span>
-            </div>
-          )}
+          ) : null}
         </section>
       </form>
     </main>
