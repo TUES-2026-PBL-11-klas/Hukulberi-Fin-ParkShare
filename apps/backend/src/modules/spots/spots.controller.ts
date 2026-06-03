@@ -9,9 +9,16 @@ import {
   Delete,
   Query,
   UseGuards,
+  Patch,
+  ForbiddenException,
 } from '@nestjs/common';
 import { SpotsService } from './spots.service';
-import { CreateSpotDto, UpdateSpotDto, SearchSpotsDto } from './dto';
+import {
+  CreateSpotDto,
+  UpdateSpotDto,
+  SearchSpotsDto,
+  UpdateSpotVerificationDto,
+} from './dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CurrentUser } from '../auth/current-user.decorator';
 
@@ -58,6 +65,23 @@ export class SpotsController {
     @CurrentUser() user: { id: string; role: string },
   ) {
     return this.spotsService.updateSpot(id, user.id, updateSpotDto);
+  }
+
+  @Patch(':id/verification')
+  @UseGuards(JwtAuthGuard)
+  async verify(
+    @Param('id') id: string,
+    @Body() updateSpotVerificationDto: UpdateSpotVerificationDto,
+    @CurrentUser() user: { id: string; role: string },
+  ) {
+    if (user.role !== 'ADMIN') {
+      throw new ForbiddenException('Only admins can verify spots');
+    }
+
+    return this.spotsService.updateSpotVerification(
+      id,
+      updateSpotVerificationDto,
+    );
   }
 
   /**

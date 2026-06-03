@@ -51,6 +51,40 @@ CREATE TABLE "access_events" (
 -- Add foreign keys
 ALTER TABLE "spots" ADD CONSTRAINT "spots_host_user_id_fkey" FOREIGN KEY ("host_user_id") REFERENCES "users"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
+-- Existing development bookings can contain placeholder spot IDs from before
+-- real spot listings existed. Seed inactive placeholders so the FK can attach
+-- without deleting booking/payment history.
+INSERT INTO "spots" (
+    "id",
+    "host_user_id",
+    "title",
+    "description",
+    "address",
+    "latitude",
+    "longitude",
+    "price_per_hour",
+    "is_active",
+    "created_at",
+    "updated_at"
+)
+SELECT
+    "bookings"."spot_id",
+    MIN("bookings"."driver_user_id"::text)::uuid,
+    'Imported booking spot',
+    'Created automatically for existing booking history.',
+    'Unknown address',
+    0,
+    0,
+    0,
+    false,
+    CURRENT_TIMESTAMP,
+    CURRENT_TIMESTAMP
+FROM "bookings"
+WHERE NOT EXISTS (
+    SELECT 1 FROM "spots" WHERE "spots"."id" = "bookings"."spot_id"
+)
+GROUP BY "bookings"."spot_id";
+
 ALTER TABLE "bookings" ADD CONSTRAINT "bookings_spot_id_fkey" FOREIGN KEY ("spot_id") REFERENCES "spots"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 ALTER TABLE "reviews" ADD CONSTRAINT "reviews_booking_id_fkey" FOREIGN KEY ("booking_id") REFERENCES "bookings"("id") ON DELETE CASCADE ON UPDATE CASCADE;

@@ -6,9 +6,14 @@ import {
   Logger,
 } from '@nestjs/common';
 import { Counter, Histogram, Gauge, register } from 'prom-client';
-import { ReviewRating } from '@prisma/client';
+import { ReviewRating, SpotVerificationStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
-import { CreateSpotDto, UpdateSpotDto, SearchSpotsDto } from './dto';
+import {
+  CreateSpotDto,
+  UpdateSpotDto,
+  SearchSpotsDto,
+  UpdateSpotVerificationDto,
+} from './dto';
 
 @Injectable()
 export class SpotsService {
@@ -61,6 +66,9 @@ export class SpotsService {
       data: {
         hostUserId,
         ...createSpotDto,
+        photoUrls: createSpotDto.photoUrls ?? [],
+        isActive: false,
+        verificationStatus: SpotVerificationStatus.PENDING,
       },
       include: {
         hostUser: {
@@ -84,10 +92,23 @@ export class SpotsService {
    */
   async searchSpots(query: SearchSpotsDto) {
     const startTime = Date.now();
+    const latitude = this.toFiniteNumber(query.latitude);
+    const longitude = this.toFiniteNumber(query.longitude);
+    const radiusKm = this.toFiniteNumber(query.radiusKm);
+    const maxPrice = this.toFiniteNumber(query.maxPrice);
+    const limit = Math.min(
+      Math.max(Math.trunc(this.toFiniteNumber(query.limit) ?? 50), 1),
+      100,
+    );
+    const offset = Math.max(
+      Math.trunc(this.toFiniteNumber(query.offset) ?? 0),
+      0,
+    );
 
     // Build where clause
     const where: any = {
       isActive: true,
+      verificationStatus: SpotVerificationStatus.VERIFIED,
     };
 
     // Text search on title/description/address
@@ -100,25 +121,25 @@ export class SpotsService {
     }
 
     // Price filter
-    if (query.maxPrice !== undefined) {
-      where.pricePerHour = { lte: query.maxPrice };
+    if (maxPrice !== undefined) {
+      where.pricePerHour = { lte: maxPrice };
     }
 
     // Geospatial filter (basic bounding box, not full distance calculation)
     // In production, use PostGIS for proper geospatial queries
     if (
-      query.latitude !== undefined &&
-      query.longitude !== undefined &&
-      query.radiusKm
+      latitude !== undefined &&
+      longitude !== undefined &&
+      radiusKm !== undefined
     ) {
-      const radiusDegrees = query.radiusKm / 111.32; // Rough conversion km to degrees
+      const radiusDegrees = radiusKm / 111.32; // Rough conversion km to degrees
       where.latitude = {
-        gte: query.latitude - radiusDegrees,
-        lte: query.latitude + radiusDegrees,
+        gte: latitude - radiusDegrees,
+        lte: latitude + radiusDegrees,
       };
       where.longitude = {
-        gte: query.longitude - radiusDegrees,
-        lte: query.longitude + radiusDegrees,
+        gte: longitude - radiusDegrees,
+        lte: longitude + radiusDegrees,
       };
     }
 
@@ -139,8 +160,8 @@ export class SpotsService {
           },
         },
       },
-      take: query.limit || 50,
-      skip: query.offset || 0,
+      take: limit,
+      skip: offset,
       orderBy: { createdAt: 'desc' },
     });
 
@@ -178,12 +199,26 @@ export class SpotsService {
     };
   }
 
+  private toFiniteNumber(value: unknown): number | undefined {
+    if (value === undefined || value === null || value === '') {
+      return undefined;
+    }
+
+    const numberValue = typeof value === 'number' ? value : Number(value);
+
+    return Number.isFinite(numberValue) ? numberValue : undefined;
+  }
+
   /**
    * Get single spot by ID
    */
   async getSpotById(id: string) {
-    const spot = await this.prisma.spot.findUnique({
-      where: { id },
+    const spot = await this.prisma.spot.findFirst({
+      where: {
+        id,
+        isActive: true,
+        verificationStatus: SpotVerificationStatus.VERIFIED,
+      },
       include: {
         hostUser: {
           select: {
@@ -271,6 +306,40 @@ export class SpotsService {
     return updated;
   }
 
+  async updateSpotVerification(
+    id: string,
+    updateSpotVerificationDto: UpdateSpotVerificationDto,
+  ) {
+    const spot = await this.prisma.spot.findUnique({ where: { id } });
+
+    if (!spot) {
+      throw new NotFoundException(`Spot with ID ${id} not found`);
+    }
+
+    const updated = await this.prisma.spot.update({
+      where: { id },
+      data: {
+        verificationStatus: updateSpotVerificationDto.status,
+        verificationNote: updateSpotVerificationDto.note,
+        verifiedAt:
+          updateSpotVerificationDto.status === SpotVerificationStatus.VERIFIED
+            ? new Date()
+            : null,
+        isActive:
+          updateSpotVerificationDto.status === SpotVerificationStatus.VERIFIED,
+      },
+      include: {
+        hostUser: {
+          select: { id: true, name: true, email: true },
+        },
+      },
+    });
+
+    void this.updateActiveSpots();
+
+    return updated;
+  }
+
   /**
    * Delete spot (owner only)
    */
@@ -311,8 +380,12 @@ export class SpotsService {
    */
   private async updateActiveSpots() {
     try {
-      const count = await this.prisma.spot.count({ where: { isActive: true } });
-      const countValue = Number(count);
+      const count = await this.prisma.spot.count({
+        where: {
+          isActive: true,
+          verificationStatus: SpotVerificationStatus.VERIFIED,
+        },
+      });
 
       if (Number.isFinite(countValue)) {
         this.spotsActive.set(countValue);

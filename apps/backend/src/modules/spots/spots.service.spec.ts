@@ -17,6 +17,7 @@ describe('SpotsService', () => {
             spot: {
               create: jest.fn(),
               findMany: jest.fn(),
+              findFirst: jest.fn(),
               findUnique: jest.fn(),
               update: jest.fn(),
               delete: jest.fn(),
@@ -49,7 +50,7 @@ describe('SpotsService', () => {
         id: '1',
         hostUserId: 'user-1',
         ...spotData,
-        isActive: true,
+        isActive: false,
         createdAt: new Date(),
         updatedAt: new Date(),
         hostUser: { id: 'user-1', name: 'Test Host' },
@@ -64,6 +65,9 @@ describe('SpotsService', () => {
         data: {
           hostUserId: 'user-1',
           ...spotData,
+          photoUrls: [],
+          isActive: false,
+          verificationStatus: 'PENDING',
         },
         include: {
           hostUser: {
@@ -104,6 +108,23 @@ describe('SpotsService', () => {
       expect(result.data).toHaveLength(1);
       expect(result.total).toBe(1);
     });
+
+    it('should coerce pagination query strings before passing them to Prisma', async () => {
+      jest.spyOn(prisma.spot, 'findMany').mockResolvedValue([]);
+      jest.spyOn(prisma.spot, 'count').mockResolvedValue(0);
+
+      await service.searchSpots({
+        limit: '100' as unknown as number,
+        offset: '0' as unknown as number,
+      });
+
+      expect(prisma.spot.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          take: 100,
+          skip: 0,
+        }),
+      );
+    });
   });
 
   describe('getSpotById', () => {
@@ -123,12 +144,21 @@ describe('SpotsService', () => {
         bookings: [],
       };
 
-      jest.spyOn(prisma.spot, 'findUnique').mockResolvedValue(mockSpot);
+      jest.spyOn(prisma.spot, 'findFirst').mockResolvedValue(mockSpot);
 
       const result = await service.getSpotById('1');
 
       expect(result).toBeDefined();
       expect(result.id).toBe('1');
+      expect(prisma.spot.findFirst).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: {
+            id: '1',
+            isActive: true,
+            verificationStatus: 'VERIFIED',
+          },
+        }),
+      );
     });
   });
 });
