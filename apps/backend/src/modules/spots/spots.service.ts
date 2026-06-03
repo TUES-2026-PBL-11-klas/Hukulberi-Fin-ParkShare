@@ -92,6 +92,18 @@ export class SpotsService {
    */
   async searchSpots(query: SearchSpotsDto) {
     const startTime = Date.now();
+    const latitude = this.toFiniteNumber(query.latitude);
+    const longitude = this.toFiniteNumber(query.longitude);
+    const radiusKm = this.toFiniteNumber(query.radiusKm);
+    const maxPrice = this.toFiniteNumber(query.maxPrice);
+    const limit = Math.min(
+      Math.max(Math.trunc(this.toFiniteNumber(query.limit) ?? 50), 1),
+      100,
+    );
+    const offset = Math.max(
+      Math.trunc(this.toFiniteNumber(query.offset) ?? 0),
+      0,
+    );
 
     // Build where clause
     const where: any = {
@@ -109,25 +121,25 @@ export class SpotsService {
     }
 
     // Price filter
-    if (query.maxPrice !== undefined) {
-      where.pricePerHour = { lte: query.maxPrice };
+    if (maxPrice !== undefined) {
+      where.pricePerHour = { lte: maxPrice };
     }
 
     // Geospatial filter (basic bounding box, not full distance calculation)
     // In production, use PostGIS for proper geospatial queries
     if (
-      query.latitude !== undefined &&
-      query.longitude !== undefined &&
-      query.radiusKm
+      latitude !== undefined &&
+      longitude !== undefined &&
+      radiusKm !== undefined
     ) {
-      const radiusDegrees = query.radiusKm / 111.32; // Rough conversion km to degrees
+      const radiusDegrees = radiusKm / 111.32; // Rough conversion km to degrees
       where.latitude = {
-        gte: query.latitude - radiusDegrees,
-        lte: query.latitude + radiusDegrees,
+        gte: latitude - radiusDegrees,
+        lte: latitude + radiusDegrees,
       };
       where.longitude = {
-        gte: query.longitude - radiusDegrees,
-        lte: query.longitude + radiusDegrees,
+        gte: longitude - radiusDegrees,
+        lte: longitude + radiusDegrees,
       };
     }
 
@@ -148,8 +160,8 @@ export class SpotsService {
           },
         },
       },
-      take: query.limit || 50,
-      skip: query.offset || 0,
+      take: limit,
+      skip: offset,
       orderBy: { createdAt: 'desc' },
     });
 
@@ -184,6 +196,16 @@ export class SpotsService {
       data: spotsWithRatings,
       total: await this.prisma.spot.count({ where }),
     };
+  }
+
+  private toFiniteNumber(value: unknown): number | undefined {
+    if (value === undefined || value === null || value === '') {
+      return undefined;
+    }
+
+    const numberValue = typeof value === 'number' ? value : Number(value);
+
+    return Number.isFinite(numberValue) ? numberValue : undefined;
   }
 
   /**

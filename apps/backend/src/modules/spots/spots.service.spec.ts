@@ -108,6 +108,23 @@ describe('SpotsService', () => {
       expect(result.data).toHaveLength(1);
       expect(result.total).toBe(1);
     });
+
+    it('should coerce pagination query strings before passing them to Prisma', async () => {
+      jest.spyOn(prisma.spot, 'findMany').mockResolvedValue([]);
+      jest.spyOn(prisma.spot, 'count').mockResolvedValue(0);
+
+      await service.searchSpots({
+        limit: '100' as unknown as number,
+        offset: '0' as unknown as number,
+      });
+
+      expect(prisma.spot.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          take: 100,
+          skip: 0,
+        }),
+      );
+    });
   });
 
   describe('getSpotById', () => {
