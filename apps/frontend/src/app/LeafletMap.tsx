@@ -53,6 +53,9 @@ const tileLayers = {
   },
 } satisfies Record<MapTheme, { base: string; labels: string }>;
 
+const transparentTileUrl =
+  "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==";
+
 const mockGarages: MapSpot[] = [
   {
     id: "mock-garage-central",
@@ -150,6 +153,7 @@ export default function LeafletMap() {
   const leafletRef = useRef<typeof import("leaflet") | null>(null);
   const mapInstanceRef = useRef<import("leaflet").Map | null>(null);
   const tileLayerRefs = useRef<import("leaflet").TileLayer[]>([]);
+  const tileThemeRef = useRef<MapTheme>("light");
   const spotMarkerRefs = useRef<import("leaflet").Marker[]>([]);
   const [theme, setTheme] = useState<MapTheme>("light");
   const [isMapReady, setIsMapReady] = useState(false);
@@ -200,8 +204,14 @@ export default function LeafletMap() {
       mapInstanceRef.current = map;
 
       tileLayerRefs.current = [
-        L.tileLayer(tileLayers.light.base, { maxZoom: 19 }).addTo(map),
-        L.tileLayer(tileLayers.light.labels, { maxZoom: 19 }).addTo(map),
+        L.tileLayer(tileLayers.light.base, {
+          maxZoom: 19,
+          errorTileUrl: transparentTileUrl,
+        }).addTo(map),
+        L.tileLayer(tileLayers.light.labels, {
+          maxZoom: 19,
+          errorTileUrl: transparentTileUrl,
+        }).addTo(map),
       ];
       setIsMapReady(true);
     }
@@ -226,11 +236,59 @@ export default function LeafletMap() {
       return;
     }
 
-    tileLayerRefs.current.forEach((layer) => layer.remove());
-    tileLayerRefs.current = [
-      L.tileLayer(tileLayers[theme].base, { maxZoom: 19 }).addTo(map),
-      L.tileLayer(tileLayers[theme].labels, { maxZoom: 19 }).addTo(map),
+    if (tileThemeRef.current === theme) {
+      return;
+    }
+
+    const previousLayers = tileLayerRefs.current;
+    let settledTiles = 0;
+    let didSwapLayers = false;
+
+    const nextLayers = [
+      L.tileLayer(tileLayers[theme].base, {
+        maxZoom: 19,
+        opacity: 0,
+        errorTileUrl: transparentTileUrl,
+      }).addTo(map),
+      L.tileLayer(tileLayers[theme].labels, {
+        maxZoom: 19,
+        opacity: 0,
+        errorTileUrl: transparentTileUrl,
+      }).addTo(map),
     ];
+
+    function swapLayers() {
+      if (didSwapLayers) {
+        return;
+      }
+
+      didSwapLayers = true;
+      nextLayers.forEach((layer) => layer.setOpacity(1));
+      previousLayers.forEach((layer) => layer.remove());
+      tileLayerRefs.current = nextLayers;
+      tileThemeRef.current = theme;
+    }
+
+    nextLayers.forEach((layer) => {
+      layer.once("load tileerror", () => {
+        settledTiles += 1;
+
+        if (settledTiles >= nextLayers.length) {
+          swapLayers();
+        }
+      });
+    });
+
+    const fallbackTimer = window.setTimeout(swapLayers, 2200);
+
+    return () => {
+      window.clearTimeout(fallbackTimer);
+      nextLayers.forEach((layer) => {
+        if (!didSwapLayers) {
+          layer.remove();
+        }
+      });
+    };
   }, [theme]);
 
   useEffect(() => {
