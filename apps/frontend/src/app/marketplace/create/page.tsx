@@ -1,268 +1,450 @@
 'use client';
 
-import React, { useState } from 'react';
-import { useRouter } from 'next/navigation';
+/* eslint-disable @next/next/no-img-element */
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import React, { useEffect, useRef, useState } from 'react';
 import './create-spot.css';
+
+type ListingForm = {
+  title: string;
+  description: string;
+  address: string;
+  latitude: string;
+  longitude: string;
+  pricePerHour: string;
+  photoUrls: string[];
+};
+
+type LeafletMapContainer = HTMLDivElement & {
+  _leaflet_id?: number;
+};
+
+const defaultCenter: [number, number] = [42.6977, 23.3219];
+const maxPhotos = 6;
+const maxPhotoSizeBytes = 4_000_000;
+const photoMaxSidePx = 1200;
+const photoQuality = 0.74;
 
 export default function CreateSpotPage() {
   const router = useRouter();
+  const mapRef = useRef<HTMLDivElement | null>(null);
+  const mapInstanceRef = useRef<import('leaflet').Map | null>(null);
+  const pinRef = useRef<import('leaflet').Marker | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [useGeolocation, setUseGeolocation] = useState(false);
-
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<ListingForm>({
     title: '',
     description: '',
     address: '',
-    latitude: '',
-    longitude: '',
+    latitude: defaultCenter[0].toString(),
+    longitude: defaultCenter[1].toString(),
     pricePerHour: '',
+    photoUrls: [],
   });
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-    const { name, value } = e.target;
-    setFormData((prev) => ({ ...prev, [name]: value }));
-  };
-
-  const handleGeolocation = () => {
-    if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        (position) => {
-          setFormData((prev) => ({
-            ...prev,
-            latitude: position.coords.latitude.toString(),
-            longitude: position.coords.longitude.toString(),
-          }));
-          setUseGeolocation(true);
-        },
-        (error) => {
-          setError(`Geolocation error: ${error.message}`);
-        },
-      );
-    } else {
-      setError('Geolocation is not supported by your browser');
+  useEffect(() => {
+    if (!mapRef.current || mapInstanceRef.current) {
+      return;
     }
-  };
 
-  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
+    let isDisposed = false;
+    const mapContainer = mapRef.current as LeafletMapContainer;
+
+    async function loadMap() {
+      if (!mapContainer || mapContainer._leaflet_id) {
+        return;
+      }
+
+      const L = await import('leaflet');
+
+      if (isDisposed || mapContainer._leaflet_id) {
+        return;
+      }
+
+      const map = L.map(mapContainer, {
+        attributionControl: false,
+        zoomControl: false,
+      }).setView(defaultCenter, 13);
+
+      L.control.zoom({ position: 'bottomright' }).addTo(map);
+
+      L.tileLayer(
+        'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
+        { maxZoom: 19 },
+      ).addTo(map);
+
+      const pinIcon = L.divIcon({
+        className: 'listing-pin-icon',
+        html: '<span aria-hidden="true"></span>',
+        iconSize: [42, 50],
+        iconAnchor: [21, 48],
+      });
+
+      const pin = L.marker(defaultCenter, {
+        draggable: true,
+        icon: pinIcon,
+      }).addTo(map);
+
+      function setCoordinates(latitude: number, longitude: number) {
+        setFormData((prev) => ({
+          ...prev,
+          latitude: latitude.toFixed(6),
+          longitude: longitude.toFixed(6),
+        }));
+      }
+
+      pin.on('dragend', () => {
+        const next = pin.getLatLng();
+        setCoordinates(next.lat, next.lng);
+      });
+
+      map.on('click', (event) => {
+        pin.setLatLng(event.latlng);
+        setCoordinates(event.latlng.lat, event.latlng.lng);
+      });
+
+      mapInstanceRef.current = map;
+      pinRef.current = pin;
+    }
+
+    void loadMap();
+
+    return () => {
+      isDisposed = true;
+      mapInstanceRef.current?.remove();
+      mapInstanceRef.current = null;
+      pinRef.current = null;
+    };
+  }, []);
+
+  useEffect(() => {
+    const latitude = Number(formData.latitude);
+    const longitude = Number(formData.longitude);
+
+    if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
+      return;
+    }
+
+    pinRef.current?.setLatLng([latitude, longitude]);
+  }, [formData.latitude, formData.longitude]);
+
+  function handleInputChange(
+    event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>,
+  ) {
+    const { name, value } = event.target;
+    setFormData((prev) => ({ ...prev, [name]: value }));
+  }
+
+  function handleGeolocation() {
+    setError(null);
+
+    if (!navigator.geolocation) {
+      setError('Geolocation is not supported by your browser.');
+      return;
+    }
+
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const nextLatitude = position.coords.latitude;
+        const nextLongitude = position.coords.longitude;
+
+        setFormData((prev) => ({
+          ...prev,
+          latitude: nextLatitude.toFixed(6),
+          longitude: nextLongitude.toFixed(6),
+        }));
+        mapInstanceRef.current?.setView([nextLatitude, nextLongitude], 17);
+      },
+      (geoError) => {
+        setError(`Geolocation error: ${geoError.message}`);
+      },
+      { enableHighAccuracy: true, timeout: 10000 },
+    );
+  }
+
+  async function handlePhotoFiles(event: React.ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(event.target.files ?? []);
+    event.target.value = '';
+
+    if (files.length === 0) {
+      return;
+    }
+
+    const remainingSlots = maxPhotos - formData.photoUrls.length;
+
+    if (remainingSlots <= 0) {
+      setError(`You can add up to ${maxPhotos} photos.`);
+      return;
+    }
+
+    const selectedFiles = files.slice(0, remainingSlots);
+    const invalidFile = selectedFiles.find(
+      (file) => !file.type.startsWith('image/') || file.size > maxPhotoSizeBytes,
+    );
+
+    if (invalidFile) {
+      setError('Choose image files under 1.2 MB each.');
+      return;
+    }
+
+    const dataUrls = await Promise.all(selectedFiles.map(compressImageFile));
+
+    setError(null);
+    setFormData((prev) => ({
+      ...prev,
+      photoUrls: [...prev.photoUrls, ...dataUrls].slice(0, maxPhotos),
+    }));
+  }
+
+  async function compressImageFile(file: File): Promise<string> {
+    const imageUrl = URL.createObjectURL(file);
+
+    try {
+      const image = await new Promise<HTMLImageElement>((resolve, reject) => {
+        const nextImage = new Image();
+        nextImage.onload = () => resolve(nextImage);
+        nextImage.onerror = () => reject(new Error('Could not read image file.'));
+        nextImage.src = imageUrl;
+      });
+
+      const scale = Math.min(
+        1,
+        photoMaxSidePx / Math.max(image.naturalWidth, image.naturalHeight),
+      );
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.max(1, Math.round(image.naturalWidth * scale));
+      canvas.height = Math.max(1, Math.round(image.naturalHeight * scale));
+
+      const context = canvas.getContext('2d');
+
+      if (!context) {
+        throw new Error('Could not prepare image preview.');
+      }
+
+      context.drawImage(image, 0, 0, canvas.width, canvas.height);
+
+      return canvas.toDataURL('image/jpeg', photoQuality);
+    } finally {
+      URL.revokeObjectURL(imageUrl);
+    }
+  }
+
+  function removePhotoUrl(url: string) {
+    setFormData((prev) => ({
+      ...prev,
+      photoUrls: prev.photoUrls.filter((photoUrl) => photoUrl !== url),
+    }));
+  }
+
+  async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
     setLoading(true);
     setError(null);
 
     try {
-      // Validate required fields
-      if (!formData.title.trim() || !formData.address.trim() || !formData.pricePerHour) {
-        throw new Error('Please fill in all required fields');
+      const accessToken = localStorage.getItem('parkshare_access_token');
+
+      if (!accessToken) {
+        throw new Error('Please log in as a host before creating a listing.');
       }
 
-      if (isNaN(Number(formData.latitude)) || isNaN(Number(formData.longitude))) {
-        throw new Error('Invalid coordinates');
+      const latitude = Number(formData.latitude);
+      const longitude = Number(formData.longitude);
+      const price = Number(formData.pricePerHour);
+
+      if (!formData.title.trim() || !formData.address.trim()) {
+        throw new Error('Title and address are required.');
       }
 
-      if (isNaN(Number(formData.pricePerHour)) || Number(formData.pricePerHour) < 0) {
-        throw new Error('Price must be a valid positive number');
+      if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
+        throw new Error('Choose a valid location on the map or enter exact coordinates.');
+      }
+
+      if (!Number.isFinite(price) || price <= 0) {
+        throw new Error('Price must be greater than 0.');
+      }
+
+      if (formData.photoUrls.length === 0) {
+        throw new Error('Add at least one photo URL so admins can verify the space.');
       }
 
       const response = await fetch('/api/v1/spots', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+        },
         body: JSON.stringify({
-          title: formData.title,
-          description: formData.description,
-          address: formData.address,
-          latitude: parseFloat(formData.latitude),
-          longitude: parseFloat(formData.longitude),
-          pricePerHour: Math.round(parseFloat(formData.pricePerHour) * 100), // Convert to cents
+          title: formData.title.trim(),
+          description: formData.description.trim() || undefined,
+          address: formData.address.trim(),
+          latitude,
+          longitude,
+          pricePerHour: Math.round(price * 100),
+          photoUrls: formData.photoUrls,
         }),
       });
 
+      const payload = (await response.json()) as
+        | { id: string }
+        | { message?: string | string[] };
+
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || 'Failed to create spot');
+        const message = 'message' in payload ? payload.message : undefined;
+        throw new Error(
+          Array.isArray(message)
+            ? message.join(' ')
+            : message || 'Failed to create spot.',
+        );
       }
 
-      const newSpot = await response.json();
-      router.push(`/marketplace/${newSpot.id}`);
+      router.push('/?listing=pending');
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'An error occurred');
+      setError(err instanceof Error ? err.message : 'An error occurred.');
     } finally {
       setLoading(false);
     }
-  };
+  }
 
   return (
-    <div className="create-spot-container">
-      <div className="create-spot-form-wrapper">
-        <div className="form-header">
-          <h1>Create a Parking Spot</h1>
-          <p>List your parking space and start earning</p>
-        </div>
+    <main className="create-spot-shell">
+      <form onSubmit={handleSubmit} className="listing-workspace">
+        <div className="listing-map-picker" ref={mapRef} aria-label="Choose spot location" />
 
-        {error && <div className="error-message">{error}</div>}
+        <header className="listing-topbar">
+          <Link href="/" className="create-spot-back">
+            Back
+          </Link>
+          <h1>Create parking listing</h1>
+          <button type="submit" className="submit-btn" disabled={loading}>
+            {loading ? 'Submitting...' : 'Submit'}
+          </button>
+        </header>
 
-        <form onSubmit={handleSubmit} className="create-spot-form">
-          {/* Title */}
-          <div className="form-section">
-            <h2>Spot Details</h2>
+        {error ? <div className="listing-alert listing-alert-error">{error}</div> : null}
 
-            <div className="form-group">
-              <label htmlFor="title">Spot Title *</label>
+        <aside className="listing-drawer">
+          <section className="form-section">
+            <h2>Spot</h2>
+            <label className="form-group" htmlFor="title">
+              <span>Title</span>
               <input
                 id="title"
                 type="text"
                 name="title"
                 value={formData.title}
                 onChange={handleInputChange}
-                placeholder="e.g., Covered parking near downtown"
-                className="form-input"
+                placeholder="Covered garage near NDK"
                 required
               />
-              <p className="form-hint">Make it descriptive and catchy</p>
-            </div>
+            </label>
 
-            {/* Description */}
-            <div className="form-group">
-              <label htmlFor="description">Description</label>
+            <label className="form-group" htmlFor="description">
+              <span>Description</span>
               <textarea
                 id="description"
                 name="description"
                 value={formData.description}
                 onChange={handleInputChange}
-                placeholder="Tell guests what makes your spot special (e.g., covered, 24/7 access, well-lit, near transit)"
-                className="form-textarea"
-                rows={5}
+                placeholder="Gate access, ceiling height, lighting, landmarks"
+                rows={4}
               />
-              <p className="form-hint">Optional but recommended</p>
+            </label>
+
+            <div className="drawer-row">
+              <label className="form-group" htmlFor="pricePerHour">
+                <span>EUR / hour</span>
+                <input
+                  id="pricePerHour"
+                  type="number"
+                  name="pricePerHour"
+                  value={formData.pricePerHour}
+                  onChange={handleInputChange}
+                  placeholder="5.00"
+                  step="0.01"
+                  min="0.01"
+                  required
+                />
+              </label>
+              <button type="button" onClick={handleGeolocation} className="secondary-action">
+                Locate
+              </button>
             </div>
-          </div>
+          </section>
 
-          {/* Location */}
-          <div className="form-section">
-            <h2>Location</h2>
-
-            <div className="form-group">
-              <label htmlFor="address">Address *</label>
+          <section className="form-section">
+            <h2>Entrance</h2>
+            <label className="form-group" htmlFor="address">
+              <span>Address</span>
               <input
                 id="address"
                 type="text"
                 name="address"
                 value={formData.address}
                 onChange={handleInputChange}
-                placeholder="Full address"
-                className="form-input"
+                placeholder="Street, number, city"
                 required
               />
-            </div>
+            </label>
 
-            {/* Coordinates */}
-            <div className="coordinates-group">
-              <div className="form-group">
-                <label htmlFor="latitude">Latitude *</label>
+            <div className="coordinate-grid">
+              <label className="form-group" htmlFor="latitude">
+                <span>Lat</span>
                 <input
                   id="latitude"
                   type="number"
                   name="latitude"
                   value={formData.latitude}
                   onChange={handleInputChange}
-                  placeholder="e.g., 40.7128"
-                  step="0.0001"
-                  className="form-input"
+                  step="0.000001"
                   required
                 />
-              </div>
-
-              <div className="form-group">
-                <label htmlFor="longitude">Longitude *</label>
+              </label>
+              <label className="form-group" htmlFor="longitude">
+                <span>Lng</span>
                 <input
                   id="longitude"
                   type="number"
                   name="longitude"
                   value={formData.longitude}
                   onChange={handleInputChange}
-                  placeholder="e.g., -74.0060"
-                  step="0.0001"
-                  className="form-input"
+                  step="0.000001"
                   required
                 />
-              </div>
+              </label>
             </div>
+          </section>
+        </aside>
 
-            <button
-              type="button"
-              onClick={handleGeolocation}
-              className="geolocation-btn-form"
-            >
-              📍 Use My Current Location
-            </button>
-            {useGeolocation && <p className="form-hint success">✓ Coordinates updated</p>}
-          </div>
+        <section className="photo-rail" aria-label="Parking spot photos">
+          <label className="photo-upload" htmlFor="photoFiles">
+            <input
+              id="photoFiles"
+              type="file"
+              accept="image/png,image/jpeg,image/webp"
+              multiple
+              onChange={handlePhotoFiles}
+            />
+            <span className="photo-upload-icon" aria-hidden="true"></span>
+            <strong>Add photos</strong>
+            <small>PNG, JPG, or WebP</small>
+          </label>
 
-          {/* Pricing */}
-          <div className="form-section">
-            <h2>Pricing</h2>
-
-            <div className="form-group">
-              <label htmlFor="pricePerHour">Price per Hour ($) *</label>
-              <input
-                id="pricePerHour"
-                type="number"
-                name="pricePerHour"
-                value={formData.pricePerHour}
-                onChange={handleInputChange}
-                placeholder="e.g., 15.50"
-                step="0.01"
-                min="0"
-                className="form-input"
-                required
-              />
-              <p className="form-hint">Set competitive rates to attract more bookings</p>
+          {formData.photoUrls.length > 0 ? (
+            <div className="photo-preview-grid">
+              {formData.photoUrls.map((url) => (
+                <figure key={url} className="photo-preview">
+                  <img src={url} alt="Parking spot preview" />
+                  <button type="button" onClick={() => removePhotoUrl(url)}>
+                    Remove
+                  </button>
+                </figure>
+              ))}
             </div>
-          </div>
-
-          {/* Actions */}
-          <div className="form-actions">
-            <Link href="/marketplace" className="cancel-btn">
-              Cancel
-            </Link>
-            <button type="submit" className="submit-btn" disabled={loading}>
-              {loading ? 'Creating...' : 'Create Spot'}
-            </button>
-          </div>
-        </form>
-      </div>
-
-      {/* Info Panel */}
-      <aside className="create-spot-info">
-        <div className="info-card">
-          <h3>Tips for Success</h3>
-          <ul>
-            <li>
-              <strong>Be descriptive:</strong> Include details like covered/uncovered, lighting, security, etc.
-            </li>
-            <li>
-              <strong>Accurate location:</strong> Guests rely on accurate coordinates
-            </li>
-            <li>
-              <strong>Competitive pricing:</strong> Check similar spots in your area
-            </li>
-            <li>
-              <strong>Complete profile:</strong> A verified host photo increases bookings
-            </li>
-            <li>
-              <strong>Quick response:</strong> Reply to guest messages within 2 hours
-            </li>
-          </ul>
-        </div>
-
-        <div className="info-card">
-          <h3>What You&apos;ll Earn</h3>
-          <p className="earning-example">
-            At <strong>$15/hour</strong>, a single 2-hour booking = <strong>$30</strong> (minus 15% fee)
-          </p>
-          <p className="earning-note">We handle payment processing. You get paid within 48 hours of booking completion.</p>
-        </div>
-      </aside>
-    </div>
+          ) : null}
+        </section>
+      </form>
+    </main>
   );
 }

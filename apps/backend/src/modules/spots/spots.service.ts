@@ -6,9 +6,14 @@ import {
   Logger,
 } from '@nestjs/common';
 import { Counter, Histogram, Gauge, register } from 'prom-client';
-import { ReviewRating } from '@prisma/client';
+import { ReviewRating, SpotVerificationStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
-import { CreateSpotDto, UpdateSpotDto, SearchSpotsDto } from './dto';
+import {
+  CreateSpotDto,
+  UpdateSpotDto,
+  SearchSpotsDto,
+  UpdateSpotVerificationDto,
+} from './dto';
 
 @Injectable()
 export class SpotsService {
@@ -61,6 +66,9 @@ export class SpotsService {
       data: {
         hostUserId,
         ...createSpotDto,
+        photoUrls: createSpotDto.photoUrls ?? [],
+        isActive: false,
+        verificationStatus: SpotVerificationStatus.PENDING,
       },
       include: {
         hostUser: {
@@ -88,6 +96,7 @@ export class SpotsService {
     // Build where clause
     const where: any = {
       isActive: true,
+      verificationStatus: SpotVerificationStatus.VERIFIED,
     };
 
     // Text search on title/description/address
@@ -270,6 +279,40 @@ export class SpotsService {
     return updated;
   }
 
+  async updateSpotVerification(
+    id: string,
+    updateSpotVerificationDto: UpdateSpotVerificationDto,
+  ) {
+    const spot = await this.prisma.spot.findUnique({ where: { id } });
+
+    if (!spot) {
+      throw new NotFoundException(`Spot with ID ${id} not found`);
+    }
+
+    const updated = await this.prisma.spot.update({
+      where: { id },
+      data: {
+        verificationStatus: updateSpotVerificationDto.status,
+        verificationNote: updateSpotVerificationDto.note,
+        verifiedAt:
+          updateSpotVerificationDto.status === SpotVerificationStatus.VERIFIED
+            ? new Date()
+            : null,
+        isActive:
+          updateSpotVerificationDto.status === SpotVerificationStatus.VERIFIED,
+      },
+      include: {
+        hostUser: {
+          select: { id: true, name: true, email: true },
+        },
+      },
+    });
+
+    void this.updateActiveSpots();
+
+    return updated;
+  }
+
   /**
    * Delete spot (owner only)
    */
@@ -310,7 +353,12 @@ export class SpotsService {
    */
   private async updateActiveSpots() {
     try {
-      const count = await this.prisma.spot.count({ where: { isActive: true } });
+      const count = await this.prisma.spot.count({
+        where: {
+          isActive: true,
+          verificationStatus: SpotVerificationStatus.VERIFIED,
+        },
+      });
 
       if (Number.isFinite(count)) {
         this.spotsActive.set(count);

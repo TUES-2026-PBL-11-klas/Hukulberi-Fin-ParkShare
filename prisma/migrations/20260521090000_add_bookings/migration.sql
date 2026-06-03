@@ -3,7 +3,7 @@ CREATE TYPE "BookingStatus" AS ENUM ('HOLD', 'CONFIRMED', 'CANCELED', 'EXPIRED')
 CREATE TABLE "bookings" (
   "id" UUID NOT NULL DEFAULT gen_random_uuid(),
   "spot_id" UUID NOT NULL,
-  "spot_label" VARCHAR(160) NOT NULL,
+  "spot_label" VARCHAR(160) NOT NULL DEFAULT 'Unknown spot',
   "driver_user_id" UUID NOT NULL,
   "status" "BookingStatus" NOT NULL DEFAULT 'HOLD',
   "amount" INTEGER NOT NULL,
