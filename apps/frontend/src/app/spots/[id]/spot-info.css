@@ -202,18 +202,20 @@
   line-height: 1.5;
 }
 
-.spot-booking-panel a {
+.spot-booking-panel button {
   display: inline-flex;
   min-height: 3.25rem;
   align-items: center;
   justify-content: center;
+  border: 0;
   border-radius: 0.9rem;
-  background: linear-gradient(135deg, #34d399, #14b8a6);
+  background: linear-gradient(135deg, #94a3b8, #64748b);
   color: #ffffff;
   font-size: 1rem;
   font-weight: 900;
-  text-decoration: none;
-  box-shadow: 0 16px 32px rgb(20 184 166 / 0.26);
+  box-shadow: 0 16px 32px rgb(100 116 139 / 0.2);
+  cursor: not-allowed;
+  opacity: 0.86;
 }
 
 .spot-info-layout {
@@ -334,6 +336,36 @@
   color: #64748b;
   font-size: 0.9rem;
   font-weight: 650;
+}
+
+.spot-availability-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.85rem;
+}
+
+.spot-availability-grid div {
+  display: flex;
+  min-height: 6rem;
+  flex-direction: column;
+  justify-content: center;
+  gap: 0.45rem;
+  border-radius: 1rem;
+  background: #f1f5f9;
+  padding: 1rem;
+}
+
+.spot-availability-grid span {
+  color: #64748b;
+  font-size: 0.78rem;
+  font-weight: 850;
+}
+
+.spot-availability-grid strong {
+  color: #0f172a;
+  font-size: 1rem;
+  font-weight: 900;
+  line-height: 1.3;
 }
 
 .spot-info-side {
@@ -528,6 +560,10 @@
 @media (max-width: 900px) {
   .spot-info-hero,
   .spot-info-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .spot-availability-grid {
     grid-template-columns: 1fr;
   }
 }

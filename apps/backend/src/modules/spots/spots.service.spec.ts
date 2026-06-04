@@ -44,6 +44,10 @@ describe('SpotsService', () => {
         latitude: 40.7128,
         longitude: -74.006,
         pricePerHour: 1500,
+        spaceCount: 3,
+        availableDays: ['MON', 'TUE', 'WED', 'THU', 'FRI'],
+        availableFrom: '08:00',
+        availableUntil: '20:00',
       };
 
       const mockSpot = {
@@ -80,6 +84,23 @@ describe('SpotsService', () => {
         },
       });
     });
+
+    it('should reject an invalid availability window', async () => {
+      await expect(
+        service.createSpot('user-1', {
+          title: 'Test Spot',
+          address: '123 Main St',
+          latitude: 40.7128,
+          longitude: -74.006,
+          pricePerHour: 1500,
+          spaceCount: 2,
+          availableDays: ['SAT', 'SUN'],
+          availableFrom: '20:00',
+          availableUntil: '08:00',
+        }),
+      ).rejects.toThrow('Available from time must be earlier');
+      expect(prisma.spot.create).not.toHaveBeenCalled();
+    });
   });
 
   describe('searchSpots', () => {
@@ -92,6 +113,10 @@ describe('SpotsService', () => {
           latitude: 40.7128,
           longitude: -74.006,
           pricePerHour: 1500,
+          spaceCount: 2,
+          availableDays: ['MON', 'TUE', 'WED'],
+          availableFrom: '09:00',
+          availableUntil: '18:00',
           isActive: true,
           createdAt: new Date(),
           updatedAt: new Date(),
@@ -136,6 +161,10 @@ describe('SpotsService', () => {
         latitude: 40.7128,
         longitude: -74.006,
         pricePerHour: 1500,
+        spaceCount: 2,
+        availableDays: ['MON', 'TUE', 'WED'],
+        availableFrom: '09:00',
+        availableUntil: '18:00',
         isActive: true,
         createdAt: new Date(),
         updatedAt: new Date(),

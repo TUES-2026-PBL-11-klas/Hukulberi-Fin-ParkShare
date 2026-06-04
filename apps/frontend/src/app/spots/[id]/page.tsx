@@ -67,6 +67,24 @@ function formatPrice(cents: number): string {
   }).format(cents / 100);
 }
 
+function formatAvailabilityDays(days?: string[]): string {
+  if (!days?.length) {
+    return "Days not set";
+  }
+
+  const labels: Record<string, string> = {
+    MON: "Mon",
+    TUE: "Tue",
+    WED: "Wed",
+    THU: "Thu",
+    FRI: "Fri",
+    SAT: "Sat",
+    SUN: "Sun",
+  };
+
+  return days.map((day) => labels[day] ?? day).join(", ");
+}
+
 function ratingToNumber(rating: ReviewRatingValue): number {
   const ratingMap = {
     ONE: 1,
@@ -254,6 +272,26 @@ export default function SpotInfoPage() {
               </div>
             </div>
           </section>
+
+          <section className="spot-info-section">
+            <h2>Availability</h2>
+            <div className="spot-availability-grid">
+              <div>
+                <span>Spaces</span>
+                <strong>{spot.spaceCount ?? 1}</strong>
+              </div>
+              <div>
+                <span>Days</span>
+                <strong>{formatAvailabilityDays(spot.availableDays)}</strong>
+              </div>
+              <div>
+                <span>Hours</span>
+                <strong>
+                  {spot.availableFrom ?? "08:00"} - {spot.availableUntil ?? "20:00"}
+                </strong>
+              </div>
+            </div>
+          </section>
         </article>
 
         <aside className="spot-info-side">
@@ -262,8 +300,10 @@ export default function SpotInfoPage() {
               <h2>Hourly rate</h2>
               <strong>{formatPrice(spot.pricePerHour)}</strong>
             </div>
-            <p>Create a reservation hold, then continue to Stripe checkout.</p>
-            <Link href="/bookings">Reserve now</Link>
+            <p>Reservation checkout is being connected to the new spot flow.</p>
+            <button type="button" disabled>
+              Reserve now
+            </button>
           </section>
 
           <section>

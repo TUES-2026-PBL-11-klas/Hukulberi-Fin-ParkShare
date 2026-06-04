@@ -1,0 +1,6 @@
+ALTER TABLE "spots"
+  ADD COLUMN "space_count" INTEGER NOT NULL DEFAULT 1,
+  ADD COLUMN "available_days" JSONB NOT NULL DEFAULT '["MON","TUE","WED","THU","FRI"]',
+  ADD COLUMN "available_from" VARCHAR(5) NOT NULL DEFAULT '08:00',
+  ADD COLUMN "available_until" VARCHAR(5) NOT NULL DEFAULT '20:00';
+

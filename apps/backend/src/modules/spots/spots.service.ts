@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-unsafe-assignment,@typescript-eslint/no-unsafe-member-access */
 import {
   Injectable,
+  BadRequestException,
   ForbiddenException,
   NotFoundException,
   Logger,
@@ -62,6 +63,11 @@ export class SpotsService {
    * Create a new parking spot
    */
   async createSpot(hostUserId: string, createSpotDto: CreateSpotDto) {
+    this.validateAvailabilityWindow(
+      createSpotDto.availableFrom,
+      createSpotDto.availableUntil,
+    );
+
     const spot = await this.prisma.spot.create({
       data: {
         hostUserId,
@@ -290,6 +296,11 @@ export class SpotsService {
       throw new ForbiddenException('You can only edit your own spots');
     }
 
+    this.validateAvailabilityWindow(
+      updateSpotDto.availableFrom,
+      updateSpotDto.availableUntil,
+    );
+
     const updated = await this.prisma.spot.update({
       where: { id },
       data: updateSpotDto,
@@ -413,5 +424,20 @@ export class SpotsService {
   ) {
     const existing = register.getSingleMetric(config.name);
     return existing instanceof Histogram ? existing : new Histogram(config);
+  }
+
+  private validateAvailabilityWindow(
+    availableFrom?: string,
+    availableUntil?: string,
+  ) {
+    if (!availableFrom || !availableUntil) {
+      return;
+    }
+
+    if (availableFrom >= availableUntil) {
+      throw new BadRequestException(
+        'Available from time must be earlier than available until time',
+      );
+    }
   }
 }
