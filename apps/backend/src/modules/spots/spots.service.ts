@@ -296,9 +296,14 @@ export class SpotsService {
       throw new ForbiddenException('You can only edit your own spots');
     }
 
+    const effectiveAvailableFrom =
+      updateSpotDto.availableFrom ?? spot.availableFrom;
+    const effectiveAvailableUntil =
+      updateSpotDto.availableUntil ?? spot.availableUntil;
+
     this.validateAvailabilityWindow(
-      updateSpotDto.availableFrom,
-      updateSpotDto.availableUntil,
+      effectiveAvailableFrom,
+      effectiveAvailableUntil,
     );
 
     const updated = await this.prisma.spot.update({
