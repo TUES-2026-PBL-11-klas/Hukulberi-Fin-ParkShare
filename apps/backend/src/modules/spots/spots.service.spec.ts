@@ -190,4 +190,39 @@ describe('SpotsService', () => {
       );
     });
   });
+
+  describe('updateSpot', () => {
+    it('should reject partial availability updates that create an invalid window', async () => {
+      const existingSpot = {
+        id: '1',
+        hostUserId: 'user-1',
+        title: 'Test Spot',
+        description: null,
+        address: '123 Main St',
+        latitude: 40.7128,
+        longitude: -74.006,
+        pricePerHour: 1500,
+        spaceCount: 2,
+        availableDays: ['MON', 'TUE', 'WED'],
+        availableFrom: '09:00',
+        availableUntil: '18:00',
+        photoUrls: [],
+        verificationStatus: 'VERIFIED',
+        verificationNote: null,
+        verifiedAt: null,
+        isActive: true,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+
+      jest.spyOn(prisma.spot, 'findUnique').mockResolvedValue(existingSpot);
+
+      await expect(
+        service.updateSpot('1', 'user-1', {
+          availableFrom: '19:00',
+        }),
+      ).rejects.toThrow('Available from time must be earlier');
+      expect(prisma.spot.update).not.toHaveBeenCalled();
+    });
+  });
 });
