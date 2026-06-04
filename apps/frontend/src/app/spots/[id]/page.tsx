@@ -240,6 +240,10 @@ export default function SpotInfoPage() {
               <MapPin aria-hidden="true" />
               {spot.address}
             </p>
+            <p className="spot-hero-description">
+              {spot.description ||
+                "Private parking spot with clear entrance details. Review the location and availability before reserving."}
+            </p>
           </div>
 
           <div className="spot-summary-row">
@@ -254,14 +258,6 @@ export default function SpotInfoPage() {
 
       <section className="spot-info-layout">
         <article className="spot-info-main">
-          <section className="spot-info-section">
-            <h2>About this spot</h2>
-            <p>
-              {spot.description ||
-                "Private parking spot with clear entrance details. Review the location and availability before reserving."}
-            </p>
-          </section>
-
           <section className="spot-info-section">
             <h2>Location</h2>
             <div className="spot-location-box">
