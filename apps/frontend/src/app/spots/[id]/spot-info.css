@@ -177,10 +177,6 @@
   gap: 1rem;
 }
 
-.spot-booking-panel p {
-  color: #64748b;
-}
-
 .spot-booking-rate h2 {
   margin: 0;
   color: #0f172a;
@@ -203,6 +199,70 @@
   line-height: 1.5;
 }
 
+.spot-reservation-fields {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.spot-reservation-fields label {
+  display: grid;
+  gap: 0.4rem;
+}
+
+.spot-reservation-fields span {
+  color: #64748b;
+  font-size: 0.8rem;
+  font-weight: 850;
+}
+
+.spot-reservation-fields input {
+  width: 100%;
+  border: 0;
+  border-radius: 0.85rem;
+  background: #f1f5f9;
+  color: #0f172a;
+  font: inherit;
+  font-size: 0.95rem;
+  font-weight: 750;
+  outline: none;
+  padding: 0.95rem 1rem;
+}
+
+.spot-reservation-fields input:focus {
+  box-shadow: 0 0 0 2px #10b981;
+}
+
+.spot-booking-total {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  border-radius: 0.85rem;
+  background: #ecfdf5;
+  color: #006c49;
+  padding: 0.9rem 1rem;
+}
+
+.spot-booking-total span {
+  color: #3c4a42;
+  font-size: 0.9rem;
+  font-weight: 850;
+}
+
+.spot-booking-total strong {
+  color: #006c49;
+  font-size: 1.1rem;
+  font-weight: 950;
+}
+
+.spot-booking-error {
+  border-radius: 0.85rem;
+  background: #fff1f2;
+  color: #be123c;
+  padding: 0.85rem 1rem;
+  font-weight: 750;
+}
+
 .spot-booking-panel button {
   display: inline-flex;
   min-height: 3rem;
@@ -210,13 +270,24 @@
   justify-content: center;
   border: 0;
   border-radius: 0.9rem;
-  background: linear-gradient(135deg, #94a3b8, #64748b);
+  background: linear-gradient(135deg, #34d399, #14b8a6);
   color: #ffffff;
+  cursor: pointer;
   font-size: 1rem;
   font-weight: 900;
-  box-shadow: 0 16px 32px rgb(100 116 139 / 0.2);
+  box-shadow: 0 16px 32px rgb(20 184 166 / 0.26);
+}
+
+.spot-booking-panel button:hover:not(:disabled),
+.spot-booking-panel button:focus-visible {
+  outline: none;
+  transform: translateY(-1px);
+}
+
+.spot-booking-panel button:disabled {
   cursor: not-allowed;
-  opacity: 0.86;
+  opacity: 0.68;
+  transform: none;
 }
 
 .spot-info-layout {
