@@ -420,13 +420,15 @@
   font-weight: 650;
 }
 
-.spot-availability-grid {
+.spot-availability-grid,
+.spot-notes-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 0.7rem;
 }
 
-.spot-availability-grid div {
+.spot-availability-grid div,
+.spot-notes-grid div {
   display: flex;
   min-height: 4.75rem;
   flex-direction: column;
@@ -437,13 +439,15 @@
   padding: 0.9rem;
 }
 
-.spot-availability-grid span {
+.spot-availability-grid span,
+.spot-notes-grid span {
   color: #64748b;
   font-size: 0.78rem;
   font-weight: 850;
 }
 
-.spot-availability-grid strong {
+.spot-availability-grid strong,
+.spot-notes-grid strong {
   color: #0f172a;
   font-size: 1rem;
   font-weight: 900;
@@ -648,6 +652,10 @@
   }
 
   .spot-availability-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .spot-notes-grid {
     grid-template-columns: 1fr;
   }
 }

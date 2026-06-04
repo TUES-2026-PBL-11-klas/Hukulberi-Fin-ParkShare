@@ -446,6 +446,24 @@ export default function SpotInfoPage() {
               </div>
             </div>
           </section>
+
+          <section className="spot-info-section">
+            <h2>Booking notes</h2>
+            <div className="spot-notes-grid">
+              <div>
+                <span>Hold</span>
+                <strong>10 minutes before payment</strong>
+              </div>
+              <div>
+                <span>Payment</span>
+                <strong>Stripe test checkout</strong>
+              </div>
+              <div>
+                <span>Confirmation</span>
+                <strong>After successful payment</strong>
+              </div>
+            </div>
+          </section>
         </article>
 
         <aside className="spot-info-side">
