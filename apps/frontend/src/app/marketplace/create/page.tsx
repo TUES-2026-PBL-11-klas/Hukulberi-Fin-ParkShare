@@ -13,6 +13,10 @@ type ListingForm = {
   latitude: string;
   longitude: string;
   pricePerHour: string;
+  spaceCount: string;
+  availableDays: string[];
+  availableFrom: string;
+  availableUntil: string;
   photoUrls: string[];
 };
 
@@ -25,6 +29,15 @@ const maxPhotos = 6;
 const maxPhotoSizeBytes = 4_000_000;
 const photoMaxSidePx = 1200;
 const photoQuality = 0.74;
+const weekDays = [
+  { value: 'MON', label: 'Mon' },
+  { value: 'TUE', label: 'Tue' },
+  { value: 'WED', label: 'Wed' },
+  { value: 'THU', label: 'Thu' },
+  { value: 'FRI', label: 'Fri' },
+  { value: 'SAT', label: 'Sat' },
+  { value: 'SUN', label: 'Sun' },
+];
 
 export default function CreateSpotPage() {
   const router = useRouter();
@@ -40,6 +53,10 @@ export default function CreateSpotPage() {
     latitude: defaultCenter[0].toString(),
     longitude: defaultCenter[1].toString(),
     pricePerHour: '',
+    spaceCount: '1',
+    availableDays: ['MON', 'TUE', 'WED', 'THU', 'FRI'],
+    availableFrom: '08:00',
+    availableUntil: '20:00',
     photoUrls: [],
   });
 
@@ -134,6 +151,22 @@ export default function CreateSpotPage() {
   ) {
     const { name, value } = event.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
+  }
+
+  function toggleAvailableDay(day: string) {
+    setFormData((prev) => {
+      const isSelected = prev.availableDays.includes(day);
+      const nextDays = isSelected
+        ? prev.availableDays.filter((availableDay) => availableDay !== day)
+        : [...prev.availableDays, day];
+
+      return {
+        ...prev,
+        availableDays: weekDays
+          .map((weekDay) => weekDay.value)
+          .filter((weekDay) => nextDays.includes(weekDay)),
+      };
+    });
   }
 
   function handleGeolocation() {
@@ -252,6 +285,7 @@ export default function CreateSpotPage() {
       const latitude = Number(formData.latitude);
       const longitude = Number(formData.longitude);
       const price = Number(formData.pricePerHour);
+      const spaceCount = Number(formData.spaceCount);
 
       if (!formData.title.trim() || !formData.address.trim()) {
         throw new Error('Title and address are required.');
@@ -265,8 +299,20 @@ export default function CreateSpotPage() {
         throw new Error('Price must be greater than 0.');
       }
 
+      if (!Number.isInteger(spaceCount) || spaceCount < 1) {
+        throw new Error('Spaces available must be at least 1.');
+      }
+
+      if (formData.availableDays.length === 0) {
+        throw new Error('Choose at least one available day.');
+      }
+
+      if (formData.availableFrom >= formData.availableUntil) {
+        throw new Error('Available from time must be earlier than available until time.');
+      }
+
       if (formData.photoUrls.length === 0) {
-        throw new Error('Add at least one photo URL so admins can verify the space.');
+        throw new Error('Add at least one photo so admins can verify the space.');
       }
 
       const response = await fetch('/api/v1/spots', {
@@ -282,6 +328,10 @@ export default function CreateSpotPage() {
           latitude,
           longitude,
           pricePerHour: Math.round(price * 100),
+          spaceCount,
+          availableDays: formData.availableDays,
+          availableFrom: formData.availableFrom,
+          availableUntil: formData.availableUntil,
           photoUrls: formData.photoUrls,
         }),
       });
@@ -370,6 +420,69 @@ export default function CreateSpotPage() {
               <button type="button" onClick={handleGeolocation} className="secondary-action">
                 Locate
               </button>
+            </div>
+          </section>
+
+          <section className="form-section">
+            <h2>Availability</h2>
+            <label className="form-group" htmlFor="spaceCount">
+              <span>Spaces available</span>
+              <input
+                id="spaceCount"
+                type="number"
+                name="spaceCount"
+                value={formData.spaceCount}
+                onChange={handleInputChange}
+                min="1"
+                step="1"
+                required
+              />
+            </label>
+
+            <div className="form-group">
+              <span>Days</span>
+              <div className="day-chip-grid" aria-label="Available days">
+                {weekDays.map((day) => (
+                  <button
+                    key={day.value}
+                    type="button"
+                    className={
+                      formData.availableDays.includes(day.value)
+                        ? 'day-chip day-chip-selected'
+                        : 'day-chip'
+                    }
+                    aria-pressed={formData.availableDays.includes(day.value)}
+                    onClick={() => toggleAvailableDay(day.value)}
+                  >
+                    {day.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="time-grid">
+              <label className="form-group" htmlFor="availableFrom">
+                <span>From</span>
+                <input
+                  id="availableFrom"
+                  type="time"
+                  name="availableFrom"
+                  value={formData.availableFrom}
+                  onChange={handleInputChange}
+                  required
+                />
+              </label>
+              <label className="form-group" htmlFor="availableUntil">
+                <span>Until</span>
+                <input
+                  id="availableUntil"
+                  type="time"
+                  name="availableUntil"
+                  value={formData.availableUntil}
+                  onChange={handleInputChange}
+                  required
+                />
+              </label>
             </div>
           </section>
 

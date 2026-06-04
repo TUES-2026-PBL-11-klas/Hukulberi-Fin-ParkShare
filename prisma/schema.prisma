@@ -156,6 +156,10 @@ model Spot {
   latitude           Float                  @db.Real
   longitude          Float                  @db.Real
   pricePerHour       Int                    @map("price_per_hour") // Price in cents (e.g., 1500 = $15.00)
+  spaceCount         Int                    @default(1) @map("space_count")
+  availableDays      Json                   @default("[\"MON\",\"TUE\",\"WED\",\"THU\",\"FRI\"]") @map("available_days")
+  availableFrom      String                 @default("08:00") @map("available_from") @db.VarChar(5)
+  availableUntil     String                 @default("20:00") @map("available_until") @db.VarChar(5)
   photoUrls          Json                   @default("[]") @map("photo_urls")
   verificationStatus SpotVerificationStatus @default(PENDING) @map("verification_status")
   verificationNote   String?                @map("verification_note") @db.VarChar(500)
