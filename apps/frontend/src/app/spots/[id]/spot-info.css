@@ -204,6 +204,64 @@
   gap: 0.75rem;
 }
 
+.spot-reservation-days {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.55rem;
+}
+
+.spot-day-option {
+  display: grid;
+  min-height: 3.25rem;
+  align-content: center;
+  gap: 0.15rem;
+  border: 0;
+  border-radius: 0.85rem;
+  background: #f1f5f9;
+  color: #0f172a;
+  cursor: pointer;
+  padding: 0.65rem 0.7rem;
+  text-align: left;
+  transition:
+    background 160ms ease,
+    box-shadow 160ms ease,
+    transform 160ms ease;
+}
+
+.spot-day-option:hover,
+.spot-day-option:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px rgb(16 185 129 / 0.35);
+  transform: translateY(-1px);
+}
+
+.spot-day-option strong {
+  color: #0f172a;
+  font-size: 0.82rem;
+  font-weight: 900;
+  line-height: 1;
+}
+
+.spot-day-option span {
+  color: #64748b;
+  font-size: 0.76rem;
+  font-weight: 800;
+}
+
+.spot-day-option-selected {
+  background: #006c49;
+  box-shadow: 0 12px 28px rgb(0 108 73 / 0.22);
+}
+
+.spot-day-option-selected strong,
+.spot-day-option-selected span {
+  color: #ffffff;
+}
+
+.spot-reservation-time-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
 .spot-reservation-fields label {
   display: grid;
   gap: 0.4rem;
@@ -272,7 +330,7 @@
   color: #be123c;
 }
 
-.spot-booking-panel button {
+.spot-reserve-button {
   display: inline-flex;
   min-height: 3rem;
   align-items: center;
@@ -287,13 +345,13 @@
   box-shadow: 0 16px 32px rgb(20 184 166 / 0.26);
 }
 
-.spot-booking-panel button:hover:not(:disabled),
-.spot-booking-panel button:focus-visible {
+.spot-reserve-button:hover:not(:disabled),
+.spot-reserve-button:focus-visible {
   outline: none;
   transform: translateY(-1px);
 }
 
-.spot-booking-panel button:disabled {
+.spot-reserve-button:disabled {
   cursor: not-allowed;
   opacity: 0.68;
   transform: none;
@@ -667,6 +725,10 @@
   .spot-notes-grid {
     grid-template-columns: 1fr;
   }
+
+  .spot-reservation-days {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 @media (max-width: 640px) {
@@ -700,5 +762,9 @@
 
   .spot-title-block h1 {
     font-size: 2rem;
+  }
+
+  .spot-reservation-time-grid {
+    grid-template-columns: 1fr;
   }
 }
