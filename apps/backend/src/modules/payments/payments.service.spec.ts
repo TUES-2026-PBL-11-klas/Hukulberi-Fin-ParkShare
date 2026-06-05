@@ -13,6 +13,7 @@ describe('PaymentsService', () => {
   let prisma: {
     payment: {
       create: jest.Mock;
+      findFirst: jest.Mock;
       update: jest.Mock;
       updateMany: jest.Mock;
     };
@@ -36,6 +37,7 @@ describe('PaymentsService', () => {
     prisma = {
       payment: {
         create: jest.fn(),
+        findFirst: jest.fn(),
         update: jest.fn(),
         updateMany: jest.fn(),
       },
@@ -185,6 +187,31 @@ describe('PaymentsService', () => {
       name: 'ParkShare parking reservation · Central Sofia test spot',
       successUrl: 'http://localhost:3000/?payment=success',
     });
+  });
+
+  it('rejects checkout when the reservation is already paid', async () => {
+    prisma.booking.findUnique.mockResolvedValue({
+      id: 'booking-1',
+      driverUserId: 'user-1',
+      spotLabel: 'Central Sofia test spot',
+      amount: 1200,
+      currency: 'eur',
+      status: BookingStatus.HOLD,
+      expiresAt: new Date(Date.now() + 60 * 60 * 1000),
+    });
+    prisma.payment.findFirst.mockResolvedValue({
+      id: 'payment-1',
+      status: PaymentStatus.SUCCEEDED,
+    });
+
+    await expect(
+      service.createCheckoutSession({
+        userId: 'user-1',
+        bookingId: 'booking-1',
+      }),
+    ).rejects.toThrow('Reservation is already paid for');
+
+    expect(stripeClient.createCheckoutSession).not.toHaveBeenCalled();
   });
 
   it('processes checkout.session.completed once and marks payment succeeded', async () => {

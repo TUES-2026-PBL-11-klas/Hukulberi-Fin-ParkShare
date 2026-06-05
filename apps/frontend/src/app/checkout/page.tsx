@@ -155,9 +155,7 @@ function CheckoutPageContent() {
         throw new Error("Missing booking id.");
       }
 
-      const successUrl = new URL("/reservations", window.location.origin);
-      successUrl.searchParams.set("payment", "success");
-      successUrl.searchParams.set("session_id", "{CHECKOUT_SESSION_ID}");
+      const successUrl = `${window.location.origin}/reservations?payment=success&session_id={CHECKOUT_SESSION_ID}`;
       const cancelUrl = new URL("/", window.location.origin);
       cancelUrl.searchParams.set("payment", "cancel");
 
@@ -171,7 +169,7 @@ function CheckoutPageContent() {
           },
           body: JSON.stringify({
             bookingId,
-            successUrl: successUrl.toString(),
+            successUrl,
             cancelUrl: cancelUrl.toString(),
           }),
         },

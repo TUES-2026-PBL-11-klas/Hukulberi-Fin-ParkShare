@@ -52,6 +52,18 @@ export class PaymentsService {
       input.userId,
       input.bookingId,
     );
+    const existingSucceededPayment = await this.prisma.payment.findFirst({
+      where: {
+        bookingId: booking.id,
+        driverUserId: input.userId,
+        status: PaymentStatus.SUCCEEDED,
+      },
+    });
+
+    if (existingSucceededPayment) {
+      throw new BadRequestException('Reservation is already paid for');
+    }
+
     const amount = booking.amount;
     const currency = booking.currency.toLowerCase();
     const name = `${DEFAULT_PAYMENT_NAME} · ${booking.spotLabel}`;
@@ -294,24 +306,41 @@ export class PaymentsService {
 
   private async confirmBookingFromSession(
     session: StripeWebhookObject,
-  ): Promise<void> {
+  ): Promise<boolean> {
     const bookingId = session.metadata?.bookingId;
     const userId = session.metadata?.userId;
 
     if (!bookingId || !userId) {
-      return;
+      return false;
     }
 
-    await this.prisma.booking.updateMany({
-      where: {
-        driverUserId: userId,
-        id: bookingId,
-        status: { in: [BookingStatus.HOLD, BookingStatus.EXPIRED] },
-      },
-      data: {
-        status: BookingStatus.CONFIRMED,
-      },
+    try {
+      const updated = await this.prisma.booking.updateMany({
+        where: {
+          driverUserId: userId,
+          id: bookingId,
+          status: { in: [BookingStatus.HOLD, BookingStatus.EXPIRED] },
+        },
+        data: {
+          status: BookingStatus.CONFIRMED,
+        },
+      });
+
+      if (updated?.count > 0) {
+        return true;
+      }
+    } catch (error) {
+      if (!this.isActiveBookingOverlapError(error)) {
+        throw error;
+      }
+    }
+
+    const booking = await this.prisma.booking.findUnique({
+      where: { id: bookingId },
+      select: { status: true },
     });
+
+    return booking?.status === BookingStatus.CONFIRMED;
   }
 
   private async markPaidSessionSucceeded(
@@ -343,8 +372,18 @@ export class PaymentsService {
       return false;
     }
 
-    await this.confirmBookingFromSession(session);
-    return true;
+    return this.confirmBookingFromSession(session);
+  }
+
+  private isActiveBookingOverlapError(error: unknown): boolean {
+    if (
+      !(error instanceof Prisma.PrismaClientKnownRequestError) ||
+      error.code !== 'P2004'
+    ) {
+      return false;
+    }
+
+    return error.message.includes('bookings_no_active_overlap');
   }
 
   private toBookingDto(booking: {
