@@ -11,6 +11,6 @@ import { UsersModule } from '../users/users.module';
   imports: [JwtModule.register({}), forwardRef(() => UsersModule)],
   controllers: [AuthController],
   providers: [AuthService, JwtAuthGuard, PasswordHasherService, TokenService],
-  exports: [JwtAuthGuard, TokenService],
+  exports: [JwtAuthGuard, TokenService, UsersModule],
 })
 export class AuthModule {}
