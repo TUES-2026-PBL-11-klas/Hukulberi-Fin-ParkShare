@@ -312,11 +312,6 @@ export default function ReservationsPage() {
 
     if (paidCheckoutSessionId === "{CHECKOUT_SESSION_ID}") {
       window.history.replaceState(null, "", window.location.pathname);
-      window.setTimeout(() => {
-        setPaymentNotice(
-          "Stripe returned without a real checkout session id. Start Checkout again so ParkShare can confirm the paid reservation.",
-        );
-      }, 0);
       return;
     }
 
