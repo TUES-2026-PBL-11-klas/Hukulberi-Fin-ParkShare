@@ -503,13 +503,7 @@ export default function LeafletMap() {
         <button
           type="button"
           className="map-primary-action"
-          onClick={() =>
-            setPaymentMessage({
-              tone: "warning",
-              title: "Reservations are being rebuilt",
-              copy: "Use the map search or spot details for now.",
-            })
-          }
+          onClick={() => router.push("/reservations")}
         >
           <svg
             aria-hidden="true"

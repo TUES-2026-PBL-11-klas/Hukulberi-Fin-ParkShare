@@ -167,6 +167,29 @@ describe('BookingsService', () => {
     expect(prisma.booking.create).not.toHaveBeenCalled();
   });
 
+  it('rejects a hold when the driver already has an active reservation', async () => {
+    prisma.booking.findFirst.mockResolvedValueOnce({
+      ...baseBooking,
+      spotId: '44444444-4444-4444-4444-444444444444',
+      endAt: new Date('2026-05-26T11:00:00.000Z'),
+    });
+
+    await expect(
+      service.createHold({
+        amount: 1200,
+        driverUserId: baseBooking.driverUserId,
+        endAt: baseBooking.endAt.toISOString(),
+        spotLabel: baseBooking.spotLabel,
+        spotId: baseBooking.spotId,
+        startAt: baseBooking.startAt.toISOString(),
+      }),
+    ).rejects.toThrow(
+      'Cancel or complete your active reservation before creating another one',
+    );
+
+    expect(prisma.booking.create).not.toHaveBeenCalled();
+  });
+
   it('rejects a hold on a day outside the spot availability', async () => {
     await expect(
       service.createHold({
