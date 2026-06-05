@@ -8,5 +8,6 @@ resources:
   - prometheus.yaml
   - alertmanager-config.yaml
   - alertmanager.yaml
+  - alertmanager-discord.yaml
   - grafana-config.yaml
   - grafana.yaml
