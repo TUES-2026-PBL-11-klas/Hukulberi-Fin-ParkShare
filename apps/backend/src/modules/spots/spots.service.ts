@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-return */
 import {
   Injectable,
   ForbiddenException,
@@ -6,7 +5,7 @@ import {
   Logger,
 } from '@nestjs/common';
 import { Counter, Histogram, Gauge, register } from 'prom-client';
-import { ReviewRating, SpotVerificationStatus } from '@prisma/client';
+import { Prisma, ReviewRating, SpotVerificationStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import {
   CreateSpotDto,
@@ -106,7 +105,7 @@ export class SpotsService {
     );
 
     // Build where clause
-    const where: any = {
+    const where: Prisma.SpotWhereInput = {
       isActive: true,
       verificationStatus: SpotVerificationStatus.VERIFIED,
     };
@@ -387,8 +386,8 @@ export class SpotsService {
         },
       });
 
-      if (Number.isFinite(countValue)) {
-        this.spotsActive.set(countValue);
+      if (Number.isFinite(count)) {
+        this.spotsActive.set(count);
       }
     } catch (error) {
       this.logger.warn(

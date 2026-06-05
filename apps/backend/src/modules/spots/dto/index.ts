@@ -14,6 +14,11 @@ import {
 } from 'class-validator';
 import { SpotVerificationStatus } from '@prisma/client';
 
+const UPDATE_SPOT_VERIFICATION_STATUSES = [
+  'VERIFIED',
+  'REJECTED',
+] as const satisfies readonly SpotVerificationStatus[];
+
 export class CreateSpotDto {
   @IsString()
   title: string;
@@ -117,8 +122,8 @@ export class SearchSpotsDto {
 }
 
 export class UpdateSpotVerificationDto {
-  @IsIn([SpotVerificationStatus.VERIFIED, SpotVerificationStatus.REJECTED])
-  status: SpotVerificationStatus;
+  @IsIn(UPDATE_SPOT_VERIFICATION_STATUSES)
+  status: (typeof UPDATE_SPOT_VERIFICATION_STATUSES)[number];
 
   @IsOptional()
   @IsString()
