@@ -31,7 +31,7 @@ scrape_configs:
   - job_name: 'backend'
     metrics_path: '/metrics'
     static_configs:
-      - targets: ['parkshare-backend.default.svc.cluster.local:80']
+      - targets: ['parkshare-backend.parkshare-dev.svc.cluster.local:80']
         labels:
           service: 'parkshare-api'
           component: 'backend'
@@ -46,7 +46,7 @@ scrape_configs:
   - job_name: 'frontend'
     metrics_path: '/api/metrics'
     static_configs:
-      - targets: ['parkshare-frontend.default.svc.cluster.local:80']
+      - targets: ['parkshare-frontend.parkshare-dev.svc.cluster.local:80']
         labels:
           service: 'parkshare-web'
           component: 'frontend'

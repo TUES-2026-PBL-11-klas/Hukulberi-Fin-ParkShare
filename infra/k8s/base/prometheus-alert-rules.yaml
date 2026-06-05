@@ -1,0 +1,27 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: prometheus-alert-rules
+  labels:
+    app: parkshare
+    component: prometheus
+data:
+  alert_rules.yml: |
+    groups:
+      - name: parkshare
+        rules:
+          - alert: ParkShareBackendDown
+            expr: up{job="parkshare-backend"} == 0
+            for: 1m
+            labels:
+              severity: critical
+            annotations:
+              summary: ParkShare backend is down
+
+          - alert: ParkShareFrontendDown
+            expr: up{job="parkshare-frontend"} == 0
+            for: 1m
+            labels:
+              severity: warning
+            annotations:
+              summary: ParkShare frontend metrics endpoint is down

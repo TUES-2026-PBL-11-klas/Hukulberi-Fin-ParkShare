@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: parkshare-prod
+  labels:
+    app: parkshare
+    environment: prod
