@@ -165,9 +165,8 @@
 }
 
 .spot-booking-panel {
-  display: flex;
-  flex-direction: column;
-  gap: 1.25rem;
+  display: grid;
+  gap: 1rem;
   padding: 1.25rem;
 }
 
@@ -176,10 +175,6 @@
   align-items: baseline;
   justify-content: space-between;
   gap: 1rem;
-}
-
-.spot-booking-panel p {
-  color: #64748b;
 }
 
 .spot-booking-rate h2 {
@@ -191,9 +186,11 @@
 
 .spot-booking-panel strong {
   color: #006c49;
-  font-size: 1.8rem;
+  font-size: clamp(1.45rem, 2.4vw, 1.85rem);
   font-weight: 900;
   letter-spacing: 0;
+  line-height: 1;
+  white-space: nowrap;
 }
 
 .spot-booking-panel p {
@@ -202,18 +199,95 @@
   line-height: 1.5;
 }
 
-.spot-booking-panel a {
+.spot-reservation-fields {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.spot-reservation-fields label {
+  display: grid;
+  gap: 0.4rem;
+}
+
+.spot-reservation-fields span {
+  color: #64748b;
+  font-size: 0.8rem;
+  font-weight: 850;
+}
+
+.spot-reservation-fields input {
+  width: 100%;
+  border: 0;
+  border-radius: 0.85rem;
+  background: #f1f5f9;
+  color: #0f172a;
+  font: inherit;
+  font-size: 0.95rem;
+  font-weight: 750;
+  outline: none;
+  padding: 0.95rem 1rem;
+}
+
+.spot-reservation-fields input:focus {
+  box-shadow: 0 0 0 2px #10b981;
+}
+
+.spot-booking-total {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  border-radius: 0.85rem;
+  background: #ecfdf5;
+  color: #006c49;
+  padding: 0.9rem 1rem;
+}
+
+.spot-booking-total span {
+  color: #3c4a42;
+  font-size: 0.9rem;
+  font-weight: 850;
+}
+
+.spot-booking-total strong {
+  color: #006c49;
+  font-size: 1.1rem;
+  font-weight: 950;
+}
+
+.spot-booking-error {
+  border-radius: 0.85rem;
+  background: #fff1f2;
+  color: #be123c;
+  padding: 0.85rem 1rem;
+  font-weight: 750;
+}
+
+.spot-booking-panel button {
   display: inline-flex;
-  min-height: 3.25rem;
+  min-height: 3rem;
   align-items: center;
   justify-content: center;
+  border: 0;
   border-radius: 0.9rem;
   background: linear-gradient(135deg, #34d399, #14b8a6);
   color: #ffffff;
+  cursor: pointer;
   font-size: 1rem;
   font-weight: 900;
-  text-decoration: none;
   box-shadow: 0 16px 32px rgb(20 184 166 / 0.26);
+}
+
+.spot-booking-panel button:hover:not(:disabled),
+.spot-booking-panel button:focus-visible {
+  outline: none;
+  transform: translateY(-1px);
+}
+
+.spot-booking-panel button:disabled {
+  cursor: not-allowed;
+  opacity: 0.68;
+  transform: none;
 }
 
 .spot-info-layout {
@@ -230,7 +304,7 @@
 .spot-info-main {
   display: grid;
   align-content: start;
-  gap: 4.75rem;
+  gap: 1.65rem;
 }
 
 .spot-title-block h1 {
@@ -249,6 +323,16 @@
   color: #64748b;
   font-size: 1rem;
   font-weight: 700;
+}
+
+.spot-title-block .spot-hero-description {
+  display: block;
+  max-width: 42rem;
+  margin-top: 1rem;
+  color: #3c4a42;
+  font-size: 1rem;
+  font-weight: 500;
+  line-height: 1.65;
 }
 
 .spot-title-block svg,
@@ -287,7 +371,7 @@
 
 .spot-info-section {
   display: grid;
-  gap: 0.75rem;
+  gap: 0.85rem;
 }
 
 .spot-info-section h2,
@@ -336,14 +420,50 @@
   font-weight: 650;
 }
 
+.spot-availability-grid,
+.spot-notes-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.7rem;
+}
+
+.spot-availability-grid div,
+.spot-notes-grid div {
+  display: flex;
+  min-height: 4.75rem;
+  flex-direction: column;
+  justify-content: center;
+  gap: 0.35rem;
+  border-radius: 0.85rem;
+  background: #f1f5f9;
+  padding: 0.9rem;
+}
+
+.spot-availability-grid span,
+.spot-notes-grid span {
+  color: #64748b;
+  font-size: 0.78rem;
+  font-weight: 850;
+}
+
+.spot-availability-grid strong,
+.spot-notes-grid strong {
+  color: #0f172a;
+  font-size: 1rem;
+  font-weight: 900;
+  line-height: 1.3;
+}
+
 .spot-info-side {
   display: grid;
   gap: 1.25rem;
-  grid-template-rows: minmax(0, 1fr) auto;
+  grid-template-rows: auto minmax(0, 1fr);
+  height: 100%;
 }
 
 .spot-info-side section {
   display: grid;
+  align-content: start;
   gap: 1rem;
 }
 
@@ -528,6 +648,14 @@
 @media (max-width: 900px) {
   .spot-info-hero,
   .spot-info-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .spot-availability-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .spot-notes-grid {
     grid-template-columns: 1fr;
   }
 }

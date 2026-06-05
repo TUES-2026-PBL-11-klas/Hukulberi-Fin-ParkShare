@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { MapPin, Star } from "lucide-react";
 import { mockGarages, type MapSpot } from "../../mock-garages";
@@ -67,6 +67,75 @@ function formatPrice(cents: number): string {
   }).format(cents / 100);
 }
 
+function readToken(): string | null {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  return localStorage.getItem("parkshare_access_token");
+}
+
+function toDateTimeInputValue(date: Date): string {
+  const offsetMs = date.getTimezoneOffset() * 60 * 1000;
+  return new Date(date.getTime() - offsetMs).toISOString().slice(0, 16);
+}
+
+function roundUpToNextHour(date: Date): Date {
+  const next = new Date(date);
+  next.setMinutes(0, 0, 0);
+
+  if (next <= date) {
+    next.setHours(next.getHours() + 1);
+  }
+
+  return next;
+}
+
+function getDefaultReservationTimes() {
+  const roundedStart = roundUpToNextHour(new Date());
+  const roundedEnd = new Date(roundedStart);
+  roundedEnd.setHours(roundedEnd.getHours() + 1);
+
+  return {
+    startAt: toDateTimeInputValue(roundedStart),
+    endAt: toDateTimeInputValue(roundedEnd),
+  };
+}
+
+function readPayloadMessage(payload: unknown, fallback: string): string {
+  if (typeof payload === "object" && payload !== null && "message" in payload) {
+    const message = (payload as ApiErrorResponse).message;
+
+    if (Array.isArray(message)) {
+      return message.join(" ");
+    }
+
+    if (typeof message === "string") {
+      return message;
+    }
+  }
+
+  return fallback;
+}
+
+function formatAvailabilityDays(days?: string[]): string {
+  if (!days?.length) {
+    return "Days not set";
+  }
+
+  const labels: Record<string, string> = {
+    MON: "Mon",
+    TUE: "Tue",
+    WED: "Wed",
+    THU: "Thu",
+    FRI: "Fri",
+    SAT: "Sat",
+    SUN: "Sun",
+  };
+
+  return days.map((day) => labels[day] ?? day).join(", ");
+}
+
 function ratingToNumber(rating: ReviewRatingValue): number {
   const ratingMap = {
     ONE: 1,
@@ -103,6 +172,7 @@ function SpotVisual({ spot, index }: { spot: SpotDetails; index: number }) {
 }
 
 export default function SpotInfoPage() {
+  const router = useRouter();
   const params = useParams<{ id: string }>();
   const spotId = params.id;
   const [spot, setSpot] = useState<SpotDetails | null>(() => {
@@ -111,6 +181,20 @@ export default function SpotInfoPage() {
   const [isLoading, setIsLoading] = useState(!spot);
   const [error, setError] = useState("");
   const [selectedPhotoIndex, setSelectedPhotoIndex] = useState(0);
+  const [startAt, setStartAt] = useState("");
+  const [endAt, setEndAt] = useState("");
+  const [bookingError, setBookingError] = useState("");
+  const [isCreatingBooking, setIsCreatingBooking] = useState(false);
+
+  useEffect(() => {
+    const defaultTimer = window.setTimeout(() => {
+      const defaults = getDefaultReservationTimes();
+      setStartAt(defaults.startAt);
+      setEndAt(defaults.endAt);
+    }, 0);
+
+    return () => window.clearTimeout(defaultTimer);
+  }, []);
 
   useEffect(() => {
     if (!spotId || mockGarages.some((garage) => garage.id === spotId)) {
@@ -153,6 +237,98 @@ export default function SpotInfoPage() {
 
     return `${spot.averageRating.toFixed(1)} (${spot.reviewCount} reviews)`;
   }, [spot]);
+
+  const bookingSummary = useMemo(() => {
+    if (!spot || !startAt || !endAt) {
+      return {
+        amount: 0,
+        hours: 0,
+      };
+    }
+
+    const startDate = new Date(startAt);
+    const endDate = new Date(endAt);
+    const durationMs = endDate.getTime() - startDate.getTime();
+    const hours = durationMs > 0 ? durationMs / (60 * 60 * 1000) : 0;
+
+    return {
+      amount: Math.round(hours * spot.pricePerHour),
+      hours,
+    };
+  }, [endAt, spot, startAt]);
+
+  async function handleReserveNow() {
+    setBookingError("");
+
+    if (!spot) {
+      return;
+    }
+
+    if (spot.id.startsWith("mock-")) {
+      setBookingError("Demo spots cannot be reserved. Choose a verified real spot.");
+      return;
+    }
+
+    const accessToken = readToken();
+
+    if (!accessToken) {
+      setBookingError("Sign in before reserving this spot.");
+      return;
+    }
+
+    const startDate = new Date(startAt);
+    const endDate = new Date(endAt);
+
+    if (!startAt || !endAt || startDate >= endDate) {
+      setBookingError("Choose a valid check-in and check-out time.");
+      return;
+    }
+
+    if (startDate < new Date()) {
+      setBookingError("Choose a check-in time in the future.");
+      return;
+    }
+
+    if (bookingSummary.amount <= 0) {
+      setBookingError("Reservation total must be greater than zero.");
+      return;
+    }
+
+    setIsCreatingBooking(true);
+
+    try {
+      const response = await fetch(`${apiBaseUrl}/api/v1/bookings`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          spotId: spot.id,
+          spotLabel: spot.title,
+          startAt: startDate.toISOString(),
+          endAt: endDate.toISOString(),
+          amount: bookingSummary.amount,
+          currency: "eur",
+        }),
+      });
+      const payload = (await response.json()) as { id?: string } | ApiErrorResponse;
+
+      if (!response.ok || !("id" in payload) || !payload.id) {
+        throw new Error(readPayloadMessage(payload, "Could not reserve this spot."));
+      }
+
+      router.push(`/checkout?bookingId=${encodeURIComponent(payload.id)}`);
+    } catch (reserveError) {
+      setBookingError(
+        reserveError instanceof Error
+          ? reserveError.message
+          : "Could not reserve this spot.",
+      );
+    } finally {
+      setIsCreatingBooking(false);
+    }
+  }
 
   if (isLoading) {
     return (
@@ -222,6 +398,10 @@ export default function SpotInfoPage() {
               <MapPin aria-hidden="true" />
               {spot.address}
             </p>
+            <p className="spot-hero-description">
+              {spot.description ||
+                "Private parking spot with clear entrance details. Review the location and availability before reserving."}
+            </p>
           </div>
 
           <div className="spot-summary-row">
@@ -237,20 +417,50 @@ export default function SpotInfoPage() {
       <section className="spot-info-layout">
         <article className="spot-info-main">
           <section className="spot-info-section">
-            <h2>About this spot</h2>
-            <p>
-              {spot.description ||
-                "Private parking spot with clear entrance details. Review the location and availability before reserving."}
-            </p>
-          </section>
-
-          <section className="spot-info-section">
             <h2>Location</h2>
             <div className="spot-location-box">
               <MapPin aria-hidden="true" />
               <div>
                 <strong>{spot.latitude.toFixed(5)}, {spot.longitude.toFixed(5)}</strong>
                 <span>{spot.address}</span>
+              </div>
+            </div>
+          </section>
+
+          <section className="spot-info-section">
+            <h2>Availability</h2>
+            <div className="spot-availability-grid">
+              <div>
+                <span>Spaces</span>
+                <strong>{spot.spaceCount ?? 1}</strong>
+              </div>
+              <div>
+                <span>Days</span>
+                <strong>{formatAvailabilityDays(spot.availableDays)}</strong>
+              </div>
+              <div>
+                <span>Hours</span>
+                <strong>
+                  {spot.availableFrom ?? "08:00"} - {spot.availableUntil ?? "20:00"}
+                </strong>
+              </div>
+            </div>
+          </section>
+
+          <section className="spot-info-section">
+            <h2>Booking notes</h2>
+            <div className="spot-notes-grid">
+              <div>
+                <span>Hold</span>
+                <strong>10 minutes before payment</strong>
+              </div>
+              <div>
+                <span>Payment</span>
+                <strong>Stripe test checkout</strong>
+              </div>
+              <div>
+                <span>Confirmation</span>
+                <strong>After successful payment</strong>
               </div>
             </div>
           </section>
@@ -262,8 +472,36 @@ export default function SpotInfoPage() {
               <h2>Hourly rate</h2>
               <strong>{formatPrice(spot.pricePerHour)}</strong>
             </div>
-            <p>Create a reservation hold, then continue to Stripe checkout.</p>
-            <Link href="/bookings">Reserve now</Link>
+            <div className="spot-reservation-fields">
+              <label>
+                <span>Check-in</span>
+                <input
+                  type="datetime-local"
+                  value={startAt}
+                  onChange={(event) => setStartAt(event.target.value)}
+                />
+              </label>
+              <label>
+                <span>Check-out</span>
+                <input
+                  type="datetime-local"
+                  value={endAt}
+                  onChange={(event) => setEndAt(event.target.value)}
+                />
+              </label>
+            </div>
+            <div className="spot-booking-total">
+              <span>{bookingSummary.hours > 0 ? `${bookingSummary.hours.toFixed(1)} hours` : "Choose times"}</span>
+              <strong>{formatPrice(bookingSummary.amount)}</strong>
+            </div>
+            {bookingError ? <p className="spot-booking-error">{bookingError}</p> : null}
+            <button
+              type="button"
+              onClick={handleReserveNow}
+              disabled={isCreatingBooking}
+            >
+              {isCreatingBooking ? "Creating hold..." : "Reserve now"}
+            </button>
           </section>
 
           <section>

@@ -212,10 +212,10 @@ function CheckoutPageContent() {
             </p>
           </div>
           <Link
-            href="/bookings"
+            href="/"
             className="inline-flex h-11 items-center justify-center rounded-full bg-slate-100 px-4 text-sm font-semibold text-slate-700 transition hover:bg-slate-200"
           >
-            Back to bookings
+            Back to map
           </Link>
         </header>
 
@@ -344,10 +344,10 @@ function CheckoutPageContent() {
                     {isSubmitting ? "Opening Checkout..." : "Pay with Stripe"}
                   </button>
                   <Link
-                    href="/bookings"
+                    href="/"
                     className="inline-flex h-12 items-center justify-center rounded-full bg-slate-100 px-5 text-sm font-semibold text-slate-700 transition hover:bg-slate-200"
                   >
-                    Back to bookings
+                    Back to map
                   </Link>
                 </div>
               </div>

@@ -8,9 +8,12 @@ import {
   Max,
   IsBoolean,
   IsArray,
+  ArrayMinSize,
   ArrayMaxSize,
   IsIn,
+  IsInt,
   MaxLength,
+  Matches,
 } from 'class-validator';
 import { SpotVerificationStatus } from '@prisma/client';
 
@@ -18,6 +21,8 @@ const UPDATE_SPOT_VERIFICATION_STATUSES = [
   'VERIFIED',
   'REJECTED',
 ] as const satisfies readonly SpotVerificationStatus[];
+const availabilityDays = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'];
+const timePattern = /^([01]\d|2[0-3]):[0-5]\d$/;
 
 export class CreateSpotDto {
   @IsString()
@@ -39,6 +44,23 @@ export class CreateSpotDto {
   @IsNumber()
   @Min(0)
   pricePerHour: number;
+
+  @IsInt()
+  @Min(1)
+  @Max(200)
+  spaceCount: number;
+
+  @IsArray()
+  @ArrayMinSize(1)
+  @ArrayMaxSize(7)
+  @IsIn(availabilityDays, { each: true })
+  availableDays: string[];
+
+  @Matches(timePattern)
+  availableFrom: string;
+
+  @Matches(timePattern)
+  availableUntil: string;
 
   @IsOptional()
   @IsArray()
@@ -73,6 +95,27 @@ export class UpdateSpotDto {
   @IsNumber()
   @Min(0)
   pricePerHour?: number;
+
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(200)
+  spaceCount?: number;
+
+  @IsOptional()
+  @IsArray()
+  @ArrayMinSize(1)
+  @ArrayMaxSize(7)
+  @IsIn(availabilityDays, { each: true })
+  availableDays?: string[];
+
+  @IsOptional()
+  @Matches(timePattern)
+  availableFrom?: string;
+
+  @IsOptional()
+  @Matches(timePattern)
+  availableUntil?: string;
 
   @IsOptional()
   @IsBoolean()

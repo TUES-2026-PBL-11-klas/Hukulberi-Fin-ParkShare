@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { mockGarages, type MapSpot } from "./mock-garages";
 
 type MapTheme = "light" | "dark";
@@ -122,6 +122,27 @@ export default function LeafletMap() {
   const [paymentMessage, setPaymentMessage] = useState<PaymentMessage | null>(
     null,
   );
+
+  const loadSpotMarkers = useCallback(async () => {
+    try {
+      const response = await fetch(`${apiBaseUrl}/api/v1/spots?limit=100`);
+
+      if (!response.ok) {
+        return;
+      }
+
+      const payload = (await response.json()) as { data?: MapSpot[] };
+      const backendSpots = payload.data ?? [];
+      const validBackendSpots = backendSpots.filter(
+        (spot) =>
+          Number.isFinite(spot.latitude) && Number.isFinite(spot.longitude),
+      );
+
+      setMapSpots([...validBackendSpots, ...mockGarages]);
+    } catch {
+      // Map markers are helpful, but the map itself should stay usable offline.
+    }
+  }, []);
 
   useEffect(() => {
     if (!mapRef.current || mapInstanceRef.current) {
@@ -244,35 +265,22 @@ export default function LeafletMap() {
       return;
     }
 
-    let isDisposed = false;
+    const initialRefresh = window.setTimeout(() => {
+      void loadSpotMarkers();
+    }, 0);
 
-    async function loadSpotMarkers() {
-      try {
-        const response = await fetch(`${apiBaseUrl}/api/v1/spots?limit=100`);
+    const refreshTimer = window.setInterval(() => {
+      void loadSpotMarkers();
+    }, 10000);
 
-        if (!response.ok) {
-          return;
-        }
-
-        const payload = (await response.json()) as { data?: MapSpot[] };
-        const backendSpots = payload.data ?? [];
-
-        if (isDisposed) {
-          return;
-        }
-
-        setMapSpots([...backendSpots, ...mockGarages]);
-      } catch {
-        // Map markers are helpful, but the map itself should stay usable offline.
-      }
-    }
-
-    void loadSpotMarkers();
+    window.addEventListener("focus", loadSpotMarkers);
 
     return () => {
-      isDisposed = true;
+      window.clearTimeout(initialRefresh);
+      window.clearInterval(refreshTimer);
+      window.removeEventListener("focus", loadSpotMarkers);
     };
-  }, [isMapReady]);
+  }, [isMapReady, loadSpotMarkers]);
 
   useEffect(() => {
     const L = leafletRef.current;
@@ -301,7 +309,7 @@ export default function LeafletMap() {
             <span>${escapeHtml(spot.address)}</span>
             <em>${(spot.pricePerHour / 100).toFixed(2)} EUR / hour</em>
             <div>
-              <a href="/bookings">Reserve now</a>
+              <a href="/spots/${encodeURIComponent(spot.id)}">Reserve now</a>
               <a href="/spots/${encodeURIComponent(spot.id)}">More info</a>
             </div>
           </div>
@@ -496,7 +504,13 @@ export default function LeafletMap() {
         <button
           type="button"
           className="map-primary-action"
-          onClick={() => router.push("/bookings")}
+          onClick={() =>
+            setPaymentMessage({
+              tone: "warning",
+              title: "Reservations are being rebuilt",
+              copy: "Use the map search or spot details for now.",
+            })
+          }
         >
           <svg
             aria-hidden="true"
