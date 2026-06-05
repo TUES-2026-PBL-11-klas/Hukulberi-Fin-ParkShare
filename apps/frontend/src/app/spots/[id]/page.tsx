@@ -746,7 +746,7 @@ export default function SpotInfoPage() {
               onClick={handleReserveNow}
               disabled={!canReserve}
             >
-              {isCreatingBooking ? "Creating hold..." : "Reserve now"}
+              {isCreatingBooking ? "Preparing reservation..." : "Reserve now"}
             </button>
           </section>
         </aside>

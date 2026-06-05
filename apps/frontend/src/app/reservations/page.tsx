@@ -13,7 +13,11 @@ import {
   RotateCw,
   XCircle,
 } from "lucide-react";
-import { BookingStatus, type BookingDto } from "@parkshare/contracts";
+import {
+  BookingStatus,
+  type BookingDto,
+  type ReconcileCheckoutSessionResponseDto,
+} from "@parkshare/contracts";
 
 const apiBaseUrl =
   process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:3001";
@@ -35,6 +39,13 @@ const statusIcons = {
   CANCELED: XCircle,
   EXPIRED: CircleAlert,
 } satisfies Record<BookingStatus, typeof Clock3>;
+
+const statusLabels = {
+  HOLD: "Awaiting payment",
+  CONFIRMED: "Confirmed",
+  CANCELED: "Canceled",
+  EXPIRED: "Payment expired",
+} satisfies Record<BookingStatus, string>;
 
 function readToken(): string | null {
   if (typeof window === "undefined") {
@@ -93,6 +104,28 @@ function canReviewBooking(booking: BookingDto, now = new Date()): boolean {
   );
 }
 
+function getPayoutWindowLabel(booking: BookingDto, now = new Date()): string {
+  if (booking.status !== BookingStatus.CONFIRMED) {
+    return "";
+  }
+
+  const endAt = new Date(booking.endAt);
+
+  if (endAt > now) {
+    return "Host payout waits until the reservation is complete.";
+  }
+
+  const payoutEligibleAt = new Date(endAt.getTime() + 24 * 60 * 60 * 1000);
+
+  if (payoutEligibleAt > now) {
+    return `24-hour review window closes ${formatDateTime(
+      payoutEligibleAt.toISOString(),
+    )}.`;
+  }
+
+  return "Ready for host payout review.";
+}
+
 function ReservationCard({
   booking,
   isCanceling,
@@ -106,6 +139,7 @@ function ReservationCard({
   const isHold = booking.status === BookingStatus.HOLD;
   const isConfirmed = booking.status === BookingStatus.CONFIRMED;
   const isFutureOrOngoing = new Date(booking.endAt) > new Date();
+  const payoutWindowLabel = getPayoutWindowLabel(booking);
 
   return (
     <article className="rounded-2xl bg-white p-5 shadow-sm shadow-slate-200/70">
@@ -116,7 +150,7 @@ function ReservationCard({
               className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-bold ${statusStyles[booking.status]}`}
             >
               <StatusIcon size={14} aria-hidden="true" />
-              {booking.status}
+              {statusLabels[booking.status]}
             </span>
             <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-500">
               {formatPrice(booking.amount, booking.currency)}
@@ -154,8 +188,14 @@ function ReservationCard({
 
           {isHold ? (
             <p className="rounded-2xl bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-700">
-              Hold expires at {formatDateTime(booking.expiresAt)}. Finish
-              payment before the hold expires.
+              Payment is not finished yet. Complete Stripe Checkout to confirm
+              this reservation.
+            </p>
+          ) : null}
+
+          {payoutWindowLabel ? (
+            <p className="rounded-2xl bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-700">
+              {payoutWindowLabel}
             </p>
           ) : null}
         </div>
@@ -252,7 +292,71 @@ export default function ReservationsPage() {
     storedToken ? "" : "Sign in to view your reservations.",
   );
   const [cancelingId, setCancelingId] = useState("");
+  const [paymentNotice, setPaymentNotice] = useState("");
   const [refreshKey, setRefreshKey] = useState(0);
+
+  useEffect(() => {
+    if (!storedToken || typeof window === "undefined") {
+      return;
+    }
+
+    const searchParams = new URLSearchParams(window.location.search);
+    const payment = searchParams.get("payment");
+    const checkoutSessionId = searchParams.get("session_id");
+
+    if (payment !== "success" || !checkoutSessionId) {
+      return;
+    }
+
+    const paidCheckoutSessionId = checkoutSessionId;
+
+    async function reconcileCheckoutSession() {
+      setPaymentNotice("Confirming Stripe payment...");
+
+      try {
+        const response = await fetch(
+          `${apiBaseUrl}/api/v1/payments/checkout-sessions/${encodeURIComponent(
+            paidCheckoutSessionId,
+          )}/reconcile`,
+          {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${storedToken}`,
+            },
+          },
+        );
+        const payload =
+          (await response.json()) as ReconcileCheckoutSessionResponseDto | ApiErrorResponse;
+
+        if (!response.ok || !("confirmed" in payload)) {
+          throw new Error(
+            readPayloadMessage(payload, "Could not confirm Stripe payment."),
+          );
+        }
+
+        if (payload.confirmed) {
+          setPaymentNotice(
+            "Payment confirmed. Your reservation is now confirmed, and host payout will wait for the 24-hour review window.",
+          );
+          setRefreshKey((key) => key + 1);
+        } else {
+          setPaymentNotice(
+            "Stripe payment is still processing. Refresh in a moment if the reservation is not confirmed yet.",
+          );
+        }
+
+        window.history.replaceState(null, "", window.location.pathname);
+      } catch (reconcileError) {
+        setPaymentNotice(
+          reconcileError instanceof Error
+            ? reconcileError.message
+            : "Could not confirm Stripe payment.",
+        );
+      }
+    }
+
+    void reconcileCheckoutSession();
+  }, [storedToken]);
 
   useEffect(() => {
     if (!storedToken) {
@@ -361,8 +465,8 @@ export default function ReservationsPage() {
               My reservations
             </h1>
             <p className="mt-2 max-w-2xl text-base leading-relaxed text-slate-500">
-              Track active parking holds, confirmed reservations, payment state,
-              and older activity in one place.
+              Track active reservations, payment state, the 24-hour review
+              window, and older activity in one place.
             </p>
           </div>
           <div className="grid grid-cols-2 gap-3 text-sm">
@@ -384,6 +488,12 @@ export default function ReservationsPage() {
         {error ? (
           <section className="rounded-2xl bg-rose-50 p-4 text-sm font-bold text-rose-700">
             {error}
+          </section>
+        ) : null}
+
+        {paymentNotice ? (
+          <section className="rounded-2xl bg-emerald-50 p-4 text-sm font-bold text-emerald-700">
+            {paymentNotice}
           </section>
         ) : null}
 

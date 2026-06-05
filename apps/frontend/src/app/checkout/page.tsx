@@ -68,6 +68,14 @@ function readToken(): string | null {
   return localStorage.getItem("parkshare_access_token");
 }
 
+function formatBookingStatus(status: BookingDto["status"]): string {
+  if (status === "HOLD") {
+    return "AWAITING PAYMENT";
+  }
+
+  return status;
+}
+
 function CheckoutPageContent() {
   const searchParams = useSearchParams();
   const bookingId = searchParams.get("bookingId");
@@ -149,6 +157,7 @@ function CheckoutPageContent() {
 
       const successUrl = new URL("/reservations", window.location.origin);
       successUrl.searchParams.set("payment", "success");
+      successUrl.searchParams.set("session_id", "{CHECKOUT_SESSION_ID}");
       const cancelUrl = new URL("/", window.location.origin);
       cancelUrl.searchParams.set("payment", "cancel");
 
@@ -204,11 +213,11 @@ function CheckoutPageContent() {
               Stripe checkout
             </p>
             <h1 className="font-[var(--font-manrope)] text-3xl font-bold tracking-tight text-slate-900 md:text-4xl">
-              Confirm the hold and complete payment.
+              Confirm your reservation and complete payment.
             </h1>
             <p className="max-w-2xl text-sm leading-6 text-slate-600 md:text-base">
-              The backend creates the hold first, then Stripe only sees the
-              server-owned booking details.
+              Stripe handles the card details. ParkShare confirms the reservation
+              after payment and keeps the host payout pending during the review window.
             </p>
           </div>
           <Link
@@ -225,8 +234,8 @@ function CheckoutPageContent() {
               No booking selected
             </h2>
             <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
-              Create a hold from the booking flow first. The checkout page needs a
-              booking id so it can fetch the server-owned reservation details.
+              Create a reservation from the booking flow first. The checkout page
+              needs a booking id so it can fetch the server-owned reservation details.
             </p>
           </section>
         ) : null}
@@ -254,7 +263,7 @@ function CheckoutPageContent() {
                           : "bg-slate-200 text-slate-700"
                   }`}
                 >
-                  {booking.status}
+                  {formatBookingStatus(booking.status)}
                 </span>
               ) : null}
             </div>
@@ -286,7 +295,7 @@ function CheckoutPageContent() {
                         {checkoutDisplayAmount}
                       </p>
                       <p className="text-sm text-slate-600">
-                        Held for booking #{booking.id}
+                      Reservation #{booking.id}
                       </p>
                     </div>
                   </div>
@@ -301,7 +310,7 @@ function CheckoutPageContent() {
                   </div>
                   <div>
                     <p className="text-xs font-semibold uppercase tracking-[0.22em] text-emerald-700">
-                      Hold expires
+                      Payment window
                     </p>
                     <p className="mt-2 font-medium">
                       {formatDateTime(booking.expiresAt)}
@@ -323,8 +332,8 @@ function CheckoutPageContent() {
                 ) : null}
                 {booking.status === "EXPIRED" ? (
                   <div className="rounded-[1.5rem] bg-rose-50 p-5 text-sm leading-6 text-rose-700">
-                    This hold expired. Go back to the booking planner and create a new
-                    reservation.
+                    This reservation payment window expired. Go back to the booking
+                    planner and create a new reservation.
                   </div>
                 ) : null}
 
@@ -364,7 +373,7 @@ function CheckoutPageContent() {
               What happens next
             </p>
             <h2 className="mt-2 font-[var(--font-manrope)] text-2xl font-semibold tracking-tight">
-              Stripe completes the payment, then the backend confirms the hold.
+              Stripe completes the payment, then ParkShare confirms the reservation.
             </h2>
             <ol className="mt-6 space-y-4 text-sm leading-6 text-slate-200">
               <li className="rounded-[1.25rem] bg-white/5 p-4">
@@ -375,8 +384,8 @@ function CheckoutPageContent() {
                 2. Stripe sends the event back to ParkShare through the webhook route.
               </li>
               <li className="rounded-[1.25rem] bg-white/5 p-4">
-                3. The booking switches from HOLD to CONFIRMED if the webhook arrives
-                before expiry.
+                3. The reservation switches to confirmed, and host payout waits for
+                the 24-hour review window.
               </li>
             </ol>
           </aside>

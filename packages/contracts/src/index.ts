@@ -48,6 +48,12 @@ export interface CreateCheckoutSessionResponseDto {
   checkoutUrl: string;
 }
 
+export interface ReconcileCheckoutSessionResponseDto {
+  booking?: BookingDto;
+  confirmed: boolean;
+  paymentId?: string;
+}
+
 export interface StripeWebhookResponseDto {
   received: true;
   duplicate: boolean;
