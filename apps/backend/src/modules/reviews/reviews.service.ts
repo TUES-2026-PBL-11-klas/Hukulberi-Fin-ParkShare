@@ -18,7 +18,9 @@ export class ReviewsService {
   }
 
   private initializeMetrics() {
-    const existingMetric = register.getSingleMetric('parkshare_marketplace_reviews_created_total');
+    const existingMetric = register.getSingleMetric(
+      'parkshare_marketplace_reviews_created_total',
+    );
     if (existingMetric) {
       this.reviewsCreated = existingMetric as Counter;
     } else {
