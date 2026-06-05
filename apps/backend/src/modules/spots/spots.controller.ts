@@ -9,7 +9,6 @@ import {
   Query,
   UseGuards,
   Patch,
-  ForbiddenException,
 } from '@nestjs/common';
 import { SpotsService } from './spots.service';
 import {

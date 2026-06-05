@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { User } from '@prisma/client';
+import { User, UserStatus as PrismaUserStatus } from '@prisma/client';
 import { PublicUserDto, UserRole, UserStatus } from '@parkshare/contracts';
 import { PrismaService } from '../prisma/prisma.service';
 
@@ -37,7 +37,7 @@ export class UsersService {
     });
   }
 
-  async updateUserStatus(id: string, status: UserStatus): Promise<User> {
+  async updateUserStatus(id: string, status: PrismaUserStatus): Promise<User> {
     return this.prisma.user.update({
       where: { id },
       data: { status },

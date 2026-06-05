@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { 
   Shield, 
@@ -12,9 +12,7 @@ import {
   UserX, 
   UserCheck, 
   ExternalLink,
-  ChevronRight,
   Filter,
-  MoreVertical,
   Loader2
 } from 'lucide-react';
 
@@ -39,16 +37,10 @@ interface Spot {
 export default function AdminDashboard() {
   const [spots, setSpots] = useState<Spot[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("ALL");
 
-  useEffect(() => {
-    fetchSpots();
-  }, []);
-
-  const fetchSpots = async () => {
-    setLoading(true);
+  const fetchSpots = useCallback(async () => {
     const token = localStorage.getItem('parkshare_access_token');
     try {
       const response = await fetch(`${apiBaseUrl}/api/v1/spots/admin/list`, {
@@ -57,12 +49,19 @@ export default function AdminDashboard() {
       if (!response.ok) throw new Error('Unauthorized or failed to fetch');
       const data = await response.json();
       setSpots(data.data || []);
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err: unknown) {
+      console.error(err instanceof Error ? err.message : 'Failed to fetch');
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      void fetchSpots();
+    }, 0);
+    return () => clearTimeout(timer);
+  }, [fetchSpots]);
 
   const handleVerify = async (spotId: string, status: 'VERIFIED' | 'REJECTED') => {
     const token = localStorage.getItem('parkshare_access_token');
@@ -76,9 +75,10 @@ export default function AdminDashboard() {
         body: JSON.stringify({ status, note: `Moderated via Admin Dashboard` })
       });
       if (!response.ok) throw new Error('Failed to update status');
-      fetchSpots();
-    } catch (err: any) {
-      alert(err.message);
+      setLoading(true);
+      void fetchSpots();
+    } catch (err: unknown) {
+      alert(err instanceof Error ? err.message : 'Update failed');
     }
   };
 
@@ -94,9 +94,10 @@ export default function AdminDashboard() {
         body: JSON.stringify({ status })
       });
       if (!response.ok) throw new Error('Failed to update user status');
-      fetchSpots();
-    } catch (err: any) {
-      alert(err.message);
+      setLoading(true);
+      void fetchSpots();
+    } catch (err: unknown) {
+      alert(err instanceof Error ? err.message : 'Update failed');
     }
   };
 
@@ -115,9 +116,7 @@ export default function AdminDashboard() {
 
   return (
     <main className="min-h-screen bg-slate-50 font-['Inter']">
-      {/* Sidebar Layout Simulation */}
       <div className="flex h-screen overflow-hidden">
-        {/* Sidebar */}
         <aside className="w-64 bg-slate-900 text-white flex-shrink-0 flex flex-col hidden md:flex">
           <div className="p-8">
             <Link href="/" className="flex items-center gap-3 group">
@@ -150,9 +149,7 @@ export default function AdminDashboard() {
           </div>
         </aside>
 
-        {/* Main Content */}
         <div className="flex-1 flex flex-col overflow-hidden">
-          {/* Top Bar */}
           <header className="h-20 bg-white border-b border-slate-200 flex items-center justify-between px-8 shrink-0">
             <h1 className="text-xl font-bold text-slate-800">Spot Moderation Dashboard</h1>
             <div className="flex items-center gap-4">
@@ -179,7 +176,6 @@ export default function AdminDashboard() {
             </div>
           </header>
 
-          {/* Scrollable Area */}
           <div className="flex-1 overflow-auto p-8">
             <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
               <table className="w-full text-left">
