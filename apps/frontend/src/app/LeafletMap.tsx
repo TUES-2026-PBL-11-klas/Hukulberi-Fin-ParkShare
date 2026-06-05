@@ -2,10 +2,31 @@
 
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { mockGarages, type MapSpot } from "./mock-garages";
 
 type MapTheme = "light" | "dark";
 type AuthMode = "login" | "signup";
+type MapSpot = {
+  id: string;
+  title: string;
+  address: string;
+  latitude: number;
+  longitude: number;
+  pricePerHour: number;
+  spaceCount?: number;
+  availableSpaces?: number;
+  availableDays?: string[];
+  availableFrom?: string;
+  availableUntil?: string;
+  description?: string;
+  photoUrls?: string[];
+  hostUser?: {
+    id?: string;
+    name: string;
+    email?: string;
+  };
+  averageRating?: number;
+  reviewCount?: number;
+};
 type AuthUser = {
   id: string;
   email: string;
@@ -128,7 +149,7 @@ export default function LeafletMap() {
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [garageSearch, setGarageSearch] = useState("");
-  const [mapSpots, setMapSpots] = useState<MapSpot[]>(mockGarages);
+  const [mapSpots, setMapSpots] = useState<MapSpot[]>([]);
   const [isAuthOpen, setIsAuthOpen] = useState(false);
   const [authMode, setAuthMode] = useState<AuthMode>("login");
   const [authName, setAuthName] = useState("");
@@ -150,7 +171,7 @@ export default function LeafletMap() {
       });
 
       if (!response.ok) {
-        setMapSpots(mockGarages);
+        setMapSpots([]);
         return;
       }
 
@@ -161,12 +182,10 @@ export default function LeafletMap() {
           Number.isFinite(spot.latitude) && Number.isFinite(spot.longitude),
       );
 
-      setMapSpots(
-        validBackendSpots.length > 0 ? validBackendSpots : mockGarages,
-      );
+      setMapSpots(validBackendSpots);
     } catch {
       // Map markers are helpful, but the map itself should stay usable offline.
-      setMapSpots(mockGarages);
+      setMapSpots([]);
     }
   }, []);
 

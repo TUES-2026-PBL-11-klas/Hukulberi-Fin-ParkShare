@@ -5,7 +5,6 @@ import Image from "next/image";
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { MapPin, Star } from "lucide-react";
-import { mockGarages, type MapSpot } from "../../mock-garages";
 import "./spot-info.css";
 
 const apiBaseUrl =
@@ -35,6 +34,29 @@ type SpotDetails = MapSpot & {
       name: string;
     };
   }>;
+};
+
+type MapSpot = {
+  id: string;
+  title: string;
+  address: string;
+  latitude: number;
+  longitude: number;
+  pricePerHour: number;
+  spaceCount?: number;
+  availableSpaces?: number;
+  availableDays?: string[];
+  availableFrom?: string;
+  availableUntil?: string;
+  description?: string;
+  photoUrls?: string[];
+  hostUser?: {
+    id?: string;
+    name: string;
+    email?: string;
+  };
+  averageRating?: number;
+  reviewCount?: number;
 };
 
 type ApiErrorResponse = {
@@ -365,10 +387,8 @@ export default function SpotInfoPage() {
   const router = useRouter();
   const params = useParams<{ id: string }>();
   const spotId = params.id;
-  const [spot, setSpot] = useState<SpotDetails | null>(() => {
-    return mockGarages.find((garage) => garage.id === spotId) ?? null;
-  });
-  const [isLoading, setIsLoading] = useState(!spot);
+  const [spot, setSpot] = useState<SpotDetails | null>(null);
+  const [isLoading, setIsLoading] = useState(Boolean(spotId));
   const [error, setError] = useState("");
   const [selectedPhotoIndex, setSelectedPhotoIndex] = useState(0);
   const [selectedDate, setSelectedDate] = useState("");
@@ -411,7 +431,7 @@ export default function SpotInfoPage() {
   }, [spotId]);
 
   useEffect(() => {
-    if (!spotId || mockGarages.some((garage) => garage.id === spotId)) {
+    if (!spotId) {
       return;
     }
 
