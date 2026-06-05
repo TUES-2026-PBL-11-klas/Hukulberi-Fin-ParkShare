@@ -242,7 +242,7 @@ function getAvailableDateOptions(spot: SpotDetails | null): ReservationDefaults[
   const cursor = new Date();
   cursor.setHours(12, 0, 0, 0);
 
-  for (let dayOffset = 0; dayOffset < 21 && options.length < 7; dayOffset += 1) {
+  for (let dayOffset = 0; dayOffset < 21 && options.length < 6; dayOffset += 1) {
     const candidate = new Date(cursor);
     candidate.setDate(cursor.getDate() + dayOffset);
 
@@ -599,6 +599,15 @@ export default function SpotInfoPage() {
             </p>
           </div>
 
+          <div className="spot-hero-host">
+            <span>{spot.hostUser?.name?.charAt(0).toUpperCase() || "P"}</span>
+            <div>
+              <small>Hosted by</small>
+              <strong>{spot.hostUser?.name || "ParkShare host"}</strong>
+              <em>{spot.hostUser?.email || "Verified through ParkShare"}</em>
+            </div>
+          </div>
+
           <div className="spot-summary-row">
             <span>
               <Star aria-hidden="true" />
@@ -732,17 +741,6 @@ export default function SpotInfoPage() {
             >
               {isCreatingBooking ? "Creating hold..." : "Reserve now"}
             </button>
-          </section>
-
-          <section>
-            <h2>Host</h2>
-            <div className="spot-host-card">
-              <span>{spot.hostUser?.name?.charAt(0).toUpperCase() || "P"}</span>
-              <div>
-                <strong>{spot.hostUser?.name || "ParkShare host"}</strong>
-                <small>{spot.hostUser?.email || "Verified through ParkShare"}</small>
-              </div>
-            </div>
           </section>
         </aside>
       </section>
