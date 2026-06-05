@@ -583,7 +583,11 @@ export default function LeafletMap() {
                   key={spot.id}
                   type="button"
                   className="map-search-result"
-                  onClick={() => undefined}
+                  onClick={() => {
+                    setIsSearchOpen(false);
+                    setGarageSearch("");
+                    router.push(`/spots/${encodeURIComponent(spot.id)}`);
+                  }}
                 >
                   <span>
                     <strong>{spot.title}</strong>
