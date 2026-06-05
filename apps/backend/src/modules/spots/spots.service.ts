@@ -345,7 +345,7 @@ export class SpotsService {
       },
       include: {
         hostUser: {
-          select: { id: true, name: true, email: true },
+          select: { id: true, name: true, email: true, status: true },
         },
       },
     });
@@ -353,6 +353,27 @@ export class SpotsService {
     void this.updateActiveSpots();
 
     return updated;
+  }
+
+  /**
+   * Admin-only: Get all spots for moderation
+   */
+  async adminListSpots(limit: number = 50, offset: number = 0) {
+    const [data, total] = await Promise.all([
+      this.prisma.spot.findMany({
+        include: {
+          hostUser: {
+            select: { id: true, name: true, email: true, status: true },
+          },
+        },
+        orderBy: { createdAt: 'desc' },
+        take: limit,
+        skip: offset,
+      }),
+      this.prisma.spot.count(),
+    ]);
+
+    return { data, total, limit, offset };
   }
 
   /**

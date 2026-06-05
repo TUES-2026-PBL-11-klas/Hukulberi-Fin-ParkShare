@@ -37,6 +37,13 @@ export class UsersService {
     });
   }
 
+  async updateUserStatus(id: string, status: UserStatus): Promise<User> {
+    return this.prisma.user.update({
+      where: { id },
+      data: { status },
+    });
+  }
+
   toPublicUser(user: User): PublicUserDto {
     return {
       id: user.id,
