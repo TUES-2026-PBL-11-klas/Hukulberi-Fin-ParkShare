@@ -167,8 +167,8 @@
 .spot-booking-panel {
   display: grid;
   height: 100%;
-  align-content: start;
-  gap: clamp(1rem, 2.15vh, 1.55rem);
+  align-content: space-between;
+  gap: 1rem;
   padding: 1.25rem;
 }
 
