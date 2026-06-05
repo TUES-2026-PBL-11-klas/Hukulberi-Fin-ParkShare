@@ -1,0 +1,21 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: parkshare-dev
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/TUES-2026-PBL-11-klas/Hukulberi-Fin-ParkShare.git
+    targetRevision: dev
+    path: infra/k8s/overlays/dev
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: parkshare-dev
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - PruneLast=true

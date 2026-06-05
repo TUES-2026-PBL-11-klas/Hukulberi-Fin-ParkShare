@@ -8,6 +8,9 @@ COPY apps/frontend/package*.json ./apps/frontend/
 COPY packages/contracts/package*.json ./packages/contracts/
 RUN npm ci --ignore-scripts
 
+COPY packages/contracts ./packages/contracts
+RUN npm run build --workspace=@parkshare/contracts
+
 COPY apps/frontend ./apps/frontend
 RUN npm run build --workspace=frontend
 

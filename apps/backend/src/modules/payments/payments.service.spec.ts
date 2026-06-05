@@ -13,7 +13,12 @@ describe('PaymentsService', () => {
   let prisma: {
     payment: {
       create: jest.Mock;
+      findFirst: jest.Mock;
       update: jest.Mock;
+      updateMany: jest.Mock;
+    };
+    booking: {
+      findUnique: jest.Mock;
       updateMany: jest.Mock;
     };
     paymentWebhookEvent: {
@@ -21,20 +26,23 @@ describe('PaymentsService', () => {
       create: jest.Mock;
       update: jest.Mock;
     };
-    booking: {
-      updateMany: jest.Mock;
-    };
   };
   let stripeClient: {
     createCheckoutSession: jest.Mock;
     constructWebhookEvent: jest.Mock;
+    retrieveCheckoutSession: jest.Mock;
   };
 
   beforeEach(() => {
     prisma = {
       payment: {
         create: jest.fn(),
+        findFirst: jest.fn(),
         update: jest.fn(),
+        updateMany: jest.fn(),
+      },
+      booking: {
+        findUnique: jest.fn(),
         updateMany: jest.fn(),
       },
       paymentWebhookEvent: {
@@ -42,13 +50,11 @@ describe('PaymentsService', () => {
         create: jest.fn(),
         update: jest.fn(),
       },
-      booking: {
-        updateMany: jest.fn(),
-      },
     };
     stripeClient = {
       createCheckoutSession: jest.fn(),
       constructWebhookEvent: jest.fn(),
+      retrieveCheckoutSession: jest.fn(),
     };
 
     service = new PaymentsService(
@@ -58,6 +64,15 @@ describe('PaymentsService', () => {
   });
 
   it('creates a Stripe Checkout Session and stores a local payment', async () => {
+    prisma.booking.findUnique.mockResolvedValue({
+      id: 'booking-1',
+      driverUserId: 'user-1',
+      spotLabel: 'Central Sofia test spot',
+      amount: 1200,
+      currency: 'eur',
+      status: BookingStatus.HOLD,
+      expiresAt: new Date(Date.now() + 60 * 60 * 1000),
+    });
     prisma.payment.create.mockResolvedValue({
       id: 'payment-1',
       amount: 1200,
@@ -76,6 +91,7 @@ describe('PaymentsService', () => {
     await expect(
       service.createCheckoutSession({
         userId: 'user-1',
+        bookingId: 'booking-1',
         successUrl: 'http://localhost:3000/payment/success',
         cancelUrl: 'http://localhost:3000/payment/cancel',
       }),
@@ -88,7 +104,7 @@ describe('PaymentsService', () => {
     expect(prisma.payment.create).toHaveBeenCalledWith({
       data: {
         amount: 1200,
-        bookingId: undefined,
+        bookingId: 'booking-1',
         currency: 'eur',
         driverUserId: 'user-1',
         provider: PaymentProviderType.STRIPE,
@@ -102,13 +118,23 @@ describe('PaymentsService', () => {
       metadata: {
         paymentId: 'payment-1',
         userId: 'user-1',
+        bookingId: 'booking-1',
       },
-      name: 'ParkShare test parking reservation',
+      name: 'ParkShare parking reservation · Central Sofia test spot',
       successUrl: 'http://localhost:3000/payment/success',
     });
   });
 
   it('uses server-owned checkout details instead of client supplied pricing', async () => {
+    prisma.booking.findUnique.mockResolvedValue({
+      id: 'booking-1',
+      driverUserId: 'user-1',
+      spotLabel: 'Central Sofia test spot',
+      amount: 1200,
+      currency: 'eur',
+      status: BookingStatus.HOLD,
+      expiresAt: new Date(Date.now() + 60 * 60 * 1000),
+    });
     prisma.payment.create.mockResolvedValue({
       id: 'payment-1',
       amount: 1200,
@@ -128,14 +154,13 @@ describe('PaymentsService', () => {
       PaymentsService['createCheckoutSession']
     >[0] = {
       userId: 'user-1',
+      bookingId: 'booking-1',
       successUrl: 'http://localhost:3000/?payment=success',
       cancelUrl: 'http://localhost:3000/?payment=cancel',
     };
 
     Object.assign(tamperedInput, {
-      amount: 50,
-      currency: 'usd',
-      name: 'Attacker controlled item',
+      bookingId: 'booking-1',
     });
 
     await service.createCheckoutSession(tamperedInput);
@@ -143,7 +168,7 @@ describe('PaymentsService', () => {
     expect(prisma.payment.create).toHaveBeenCalledWith({
       data: {
         amount: 1200,
-        bookingId: undefined,
+        bookingId: 'booking-1',
         currency: 'eur',
         driverUserId: 'user-1',
         provider: PaymentProviderType.STRIPE,
@@ -157,10 +182,36 @@ describe('PaymentsService', () => {
       metadata: {
         paymentId: 'payment-1',
         userId: 'user-1',
+        bookingId: 'booking-1',
       },
-      name: 'ParkShare test parking reservation',
+      name: 'ParkShare parking reservation · Central Sofia test spot',
       successUrl: 'http://localhost:3000/?payment=success',
     });
+  });
+
+  it('rejects checkout when the reservation is already paid', async () => {
+    prisma.booking.findUnique.mockResolvedValue({
+      id: 'booking-1',
+      driverUserId: 'user-1',
+      spotLabel: 'Central Sofia test spot',
+      amount: 1200,
+      currency: 'eur',
+      status: BookingStatus.HOLD,
+      expiresAt: new Date(Date.now() + 60 * 60 * 1000),
+    });
+    prisma.payment.findFirst.mockResolvedValue({
+      id: 'payment-1',
+      status: PaymentStatus.SUCCEEDED,
+    });
+
+    await expect(
+      service.createCheckoutSession({
+        userId: 'user-1',
+        bookingId: 'booking-1',
+      }),
+    ).rejects.toThrow('Reservation is already paid for');
+
+    expect(stripeClient.createCheckoutSession).not.toHaveBeenCalled();
   });
 
   it('processes checkout.session.completed once and marks payment succeeded', async () => {
@@ -226,9 +277,8 @@ describe('PaymentsService', () => {
     expect(prisma.booking.updateMany).toHaveBeenCalledWith({
       where: {
         driverUserId: 'user-1',
-        expiresAt: { gt: expect.any(Date) as Date },
         id: 'booking-1',
-        status: BookingStatus.HOLD,
+        status: { in: [BookingStatus.HOLD, BookingStatus.EXPIRED] },
       },
       data: {
         status: BookingStatus.CONFIRMED,
@@ -236,11 +286,11 @@ describe('PaymentsService', () => {
     });
   });
 
-  it('does not confirm expired booking holds after checkout completion', async () => {
+  it('confirms expired pending reservations after checkout completion', async () => {
     prisma.paymentWebhookEvent.findUnique.mockResolvedValue(null);
     prisma.paymentWebhookEvent.create.mockResolvedValue({ id: 'webhook-1' });
     prisma.payment.updateMany.mockResolvedValue({ count: 1 });
-    prisma.booking.updateMany.mockResolvedValue({ count: 0 });
+    prisma.booking.updateMany.mockResolvedValue({ count: 1 });
     stripeClient.constructWebhookEvent.mockReturnValue({
       id: 'evt_test_123',
       type: 'checkout.session.completed',
@@ -262,12 +312,70 @@ describe('PaymentsService', () => {
     expect(prisma.booking.updateMany).toHaveBeenCalledWith({
       where: {
         driverUserId: 'user-1',
-        expiresAt: { gt: expect.any(Date) as Date },
         id: 'booking-1',
-        status: BookingStatus.HOLD,
+        status: { in: [BookingStatus.HOLD, BookingStatus.EXPIRED] },
       },
       data: {
         status: BookingStatus.CONFIRMED,
+      },
+    });
+  });
+
+  it('reconciles a paid checkout session and confirms the booking', async () => {
+    const booking = {
+      id: 'booking-1',
+      spotId: 'spot-1',
+      spotLabel: 'Central Sofia test spot',
+      driverUserId: 'user-1',
+      status: BookingStatus.CONFIRMED,
+      amount: 1200,
+      currency: 'eur',
+      startAt: new Date('2026-06-05T10:00:00.000Z'),
+      endAt: new Date('2026-06-05T11:00:00.000Z'),
+      expiresAt: new Date('2026-06-05T09:10:00.000Z'),
+      createdAt: new Date('2026-06-05T09:00:00.000Z'),
+      updatedAt: new Date('2026-06-05T09:02:00.000Z'),
+    };
+    stripeClient.retrieveCheckoutSession.mockResolvedValue({
+      id: 'cs_test_123',
+      payment_intent: 'pi_test_123',
+      payment_status: 'paid',
+      metadata: {
+        bookingId: 'booking-1',
+        paymentId: 'payment-1',
+        userId: 'user-1',
+      },
+    });
+    prisma.payment.updateMany.mockResolvedValue({ count: 1 });
+    prisma.booking.findUnique.mockResolvedValue(booking);
+
+    await expect(
+      service.reconcileCheckoutSession({
+        checkoutSessionId: 'cs_test_123',
+        userId: 'user-1',
+      }),
+    ).resolves.toEqual({
+      booking: {
+        ...booking,
+        startAt: booking.startAt.toISOString(),
+        endAt: booking.endAt.toISOString(),
+        expiresAt: booking.expiresAt.toISOString(),
+        createdAt: booking.createdAt.toISOString(),
+        updatedAt: booking.updatedAt.toISOString(),
+      },
+      confirmed: true,
+      paymentId: 'payment-1',
+    });
+
+    expect(prisma.payment.updateMany).toHaveBeenCalledWith({
+      where: {
+        driverUserId: 'user-1',
+        id: 'payment-1',
+        providerCheckoutSessionId: 'cs_test_123',
+      },
+      data: {
+        providerPaymentIntentId: 'pi_test_123',
+        status: PaymentStatus.SUCCEEDED,
       },
     });
   });

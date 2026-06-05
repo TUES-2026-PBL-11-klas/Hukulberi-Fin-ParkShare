@@ -1,0 +1,13 @@
+apiVersion: 1
+
+# Provision dashboards from the local directory
+providers:
+  - name: 'ParkShare Dashboards'
+    orgId: 1
+    folder: 'ParkShare'
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 10
+    allowUiUpdates: true
+    options:
+      path: /etc/grafana/provisioning/dashboards/json

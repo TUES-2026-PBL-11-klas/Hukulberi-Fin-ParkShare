@@ -12,18 +12,37 @@ import {
   Booking,
   BookingStatus as PrismaBookingStatus,
   Prisma,
+  Spot,
+  SpotVerificationStatus,
 } from '@prisma/client';
 import {
   BookingDto,
   BookingStatus,
   CreateBookingRequestDto,
 } from '@parkshare/contracts';
+import { MetricsService } from '../metrics/metrics.service';
 import { PrismaService } from '../prisma/prisma.service';
 
 const DEFAULT_CURRENCY = 'eur';
 const HOLD_TTL_MINUTES = 10;
 const EXPIRY_POLL_MS = 60_000;
 const ACTIVE_BOOKING_OVERLAP_CONSTRAINT = 'bookings_no_active_overlap';
+const BOOKING_TIME_ZONE = 'Europe/Sofia';
+const weekdayMap: Record<string, string> = {
+  Mon: 'MON',
+  Tue: 'TUE',
+  Wed: 'WED',
+  Thu: 'THU',
+  Fri: 'FRI',
+  Sat: 'SAT',
+  Sun: 'SUN',
+};
+
+type ZonedDateParts = {
+  day: string;
+  dateKey: string;
+  time: string;
+};
 
 @Injectable()
 export class BookingsService implements OnModuleInit, OnModuleDestroy {
@@ -31,7 +50,10 @@ export class BookingsService implements OnModuleInit, OnModuleDestroy {
   private expiryTimer?: NodeJS.Timeout;
   private expiryRun?: Promise<void>;
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly metrics: MetricsService = new MetricsService(),
+  ) {}
 
   onModuleInit() {
     this.expiryTimer = setInterval(() => {
@@ -56,11 +78,44 @@ export class BookingsService implements OnModuleInit, OnModuleDestroy {
       throw new BadRequestException('Spot id is required');
     }
 
+    if (!input.spotLabel?.trim()) {
+      throw new BadRequestException('Spot label is required');
+    }
+
     const startAt = this.parseDate(input.startAt, 'startAt');
     const endAt = this.parseDate(input.endAt, 'endAt');
 
     if (startAt >= endAt) {
       throw new BadRequestException('Start time must be before end time');
+    }
+
+    const spot = await this.prisma.spot.findUnique({
+      where: { id: input.spotId },
+    });
+
+    if (!spot) {
+      throw new NotFoundException('Spot not found');
+    }
+
+    if (
+      !spot.isActive ||
+      spot.verificationStatus !== SpotVerificationStatus.VERIFIED
+    ) {
+      throw new BadRequestException('Spot is not available for reservations');
+    }
+
+    this.validateBookingAgainstSpotAvailability(spot, startAt, endAt);
+
+    const expectedAmount = this.calculateBookingAmount(
+      spot.pricePerHour,
+      startAt,
+      endAt,
+    );
+
+    if (input.amount !== expectedAmount) {
+      throw new BadRequestException(
+        'Booking amount does not match the selected time range',
+      );
     }
 
     if (!Number.isFinite(input.amount) || input.amount <= 0) {
@@ -75,20 +130,19 @@ export class BookingsService implements OnModuleInit, OnModuleDestroy {
 
     await this.expireOverdueHoldsOnce();
 
-    const overlap = await this.prisma.booking.findFirst({
+    const activeDriverBooking = await this.prisma.booking.findFirst({
       where: {
-        spotId: input.spotId,
+        driverUserId: input.driverUserId,
         status: {
           in: [PrismaBookingStatus.HOLD, PrismaBookingStatus.CONFIRMED],
         },
-        startAt: { lt: endAt },
-        endAt: { gt: startAt },
+        endAt: { gt: new Date() },
       },
     });
 
-    if (overlap) {
+    if (activeDriverBooking) {
       throw new ConflictException(
-        'Spot is already booked for the selected time range',
+        'Cancel or complete your active reservation before creating another one',
       );
     }
 
@@ -97,18 +151,41 @@ export class BookingsService implements OnModuleInit, OnModuleDestroy {
     let booking: Booking;
 
     try {
-      booking = await this.prisma.booking.create({
-        data: {
-          spotId: input.spotId,
-          driverUserId: input.driverUserId,
-          status: PrismaBookingStatus.HOLD,
-          amount: input.amount,
-          currency,
-          startAt,
-          endAt,
-          expiresAt,
+      booking = await this.prisma.$transaction(
+        async (tx) => {
+          const overlappingBookings = await tx.booking.count({
+            where: {
+              spotId: input.spotId,
+              status: {
+                in: [PrismaBookingStatus.HOLD, PrismaBookingStatus.CONFIRMED],
+              },
+              startAt: { lt: endAt },
+              endAt: { gt: startAt },
+            },
+          });
+
+          if (overlappingBookings >= Math.max(spot.spaceCount, 1)) {
+            throw new ConflictException(
+              'No spaces are available for the selected time range',
+            );
+          }
+
+          return tx.booking.create({
+            data: {
+              spotId: input.spotId,
+              spotLabel: input.spotLabel.trim(),
+              driverUserId: input.driverUserId,
+              status: PrismaBookingStatus.HOLD,
+              amount: input.amount,
+              currency,
+              startAt,
+              endAt,
+              expiresAt,
+            },
+          });
         },
-      });
+        { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+      );
     } catch (error) {
       if (this.isActiveBookingOverlapError(error)) {
         throw new ConflictException(
@@ -118,6 +195,8 @@ export class BookingsService implements OnModuleInit, OnModuleDestroy {
 
       throw error;
     }
+
+    this.metrics.recordBookingCreated(PrismaBookingStatus.HOLD);
 
     return this.toBookingDto(booking);
   }
@@ -178,17 +257,23 @@ export class BookingsService implements OnModuleInit, OnModuleDestroy {
       data: { status: PrismaBookingStatus.CANCELED },
     });
 
+    this.metrics.recordBookingCanceled();
+
     return this.toBookingDto(updated);
   }
 
   private async expireOverdueHolds(): Promise<void> {
-    await this.prisma.booking.updateMany({
+    const expired = await this.prisma.booking.updateMany({
       where: {
         status: PrismaBookingStatus.HOLD,
         expiresAt: { lt: new Date() },
       },
       data: { status: PrismaBookingStatus.EXPIRED },
     });
+
+    if (expired?.count > 0) {
+      this.metrics.recordBookingExpired(expired.count);
+    }
   }
 
   private expireOverdueHoldsOnce(): Promise<void> {
@@ -205,6 +290,7 @@ export class BookingsService implements OnModuleInit, OnModuleDestroy {
     return {
       id: booking.id,
       spotId: booking.spotId,
+      spotLabel: booking.spotLabel,
       driverUserId: booking.driverUserId,
       status: booking.status as BookingStatus,
       amount: booking.amount,
@@ -225,6 +311,80 @@ export class BookingsService implements OnModuleInit, OnModuleDestroy {
     }
 
     return date;
+  }
+
+  private validateBookingAgainstSpotAvailability(
+    spot: Spot,
+    startAt: Date,
+    endAt: Date,
+  ) {
+    const startParts = this.getZonedDateParts(startAt);
+    const endParts = this.getZonedDateParts(endAt);
+    const availableDays = this.getAvailableDays(spot.availableDays);
+
+    if (startParts.dateKey !== endParts.dateKey) {
+      throw new BadRequestException(
+        'Booking must start and end on the same available day',
+      );
+    }
+
+    if (!availableDays.includes(startParts.day)) {
+      throw new BadRequestException(
+        'Spot is not available on the selected day',
+      );
+    }
+
+    if (
+      startParts.time < spot.availableFrom ||
+      endParts.time > spot.availableUntil
+    ) {
+      throw new BadRequestException(
+        'Spot is not available during the selected hours',
+      );
+    }
+  }
+
+  private calculateBookingAmount(
+    pricePerHour: number,
+    startAt: Date,
+    endAt: Date,
+  ): number {
+    const durationHours =
+      (endAt.getTime() - startAt.getTime()) / (60 * 60 * 1000);
+
+    return Math.round(durationHours * pricePerHour);
+  }
+
+  private getAvailableDays(value: Prisma.JsonValue): string[] {
+    if (!Array.isArray(value)) {
+      return [];
+    }
+
+    return value.filter((day): day is string => typeof day === 'string');
+  }
+
+  private getZonedDateParts(date: Date): ZonedDateParts {
+    const parts = new Intl.DateTimeFormat('en-US', {
+      day: '2-digit',
+      hour: '2-digit',
+      hourCycle: 'h23',
+      minute: '2-digit',
+      month: '2-digit',
+      timeZone: BOOKING_TIME_ZONE,
+      weekday: 'short',
+      year: 'numeric',
+    }).formatToParts(date);
+
+    const values = Object.fromEntries(
+      parts.map((part) => [part.type, part.value]),
+    );
+    const weekday = values.weekday ?? '';
+
+    return {
+      day: weekdayMap[weekday] ?? weekday.toUpperCase(),
+      dateKey: `${values.year}-${values.month}-${values.day}`,
+      time: `${values.hour}:${values.minute}`,
+    };
   }
 
   private isActiveBookingOverlapError(error: unknown): boolean {

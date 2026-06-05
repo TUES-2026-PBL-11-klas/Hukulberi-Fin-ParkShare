@@ -2,6 +2,7 @@ import {
   BadRequestException,
   Body,
   Controller,
+  Param,
   Post,
   Req,
   UnauthorizedException,
@@ -10,6 +11,7 @@ import {
 import type {
   CreateCheckoutSessionRequestDto,
   CreateCheckoutSessionResponseDto,
+  ReconcileCheckoutSessionResponseDto,
   StripeWebhookResponseDto,
 } from '@parkshare/contracts';
 import { Request } from 'express';
@@ -39,6 +41,24 @@ export class PaymentsController {
 
     return this.paymentsService.createCheckoutSession({
       ...body,
+      userId: request.user.id,
+    });
+  }
+
+  @Post('payments/checkout-sessions/:checkoutSessionId/reconcile')
+  @UseGuards(JwtAuthGuard)
+  reconcileCheckoutSession(
+    @Req() request: AuthenticatedRequest,
+    @Param('checkoutSessionId') checkoutSessionId: string,
+  ): Promise<ReconcileCheckoutSessionResponseDto> {
+    if (!request.user) {
+      throw new UnauthorizedException(
+        'Authenticated request is missing user context',
+      );
+    }
+
+    return this.paymentsService.reconcileCheckoutSession({
+      checkoutSessionId,
       userId: request.user.id,
     });
   }

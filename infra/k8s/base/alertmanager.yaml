@@ -1,0 +1,59 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: alertmanager
+  labels:
+    app: parkshare
+    component: alertmanager
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: parkshare
+      component: alertmanager
+  template:
+    metadata:
+      labels:
+        app: parkshare
+        component: alertmanager
+    spec:
+      containers:
+        - name: alertmanager
+          image: prom/alertmanager:v0.28.1
+          args:
+            - --config.file=/etc/alertmanager/alertmanager.yml
+            - --storage.path=/alertmanager
+          ports:
+            - name: http
+              containerPort: 9093
+          volumeMounts:
+            - name: config
+              mountPath: /etc/alertmanager
+          resources:
+            requests:
+              cpu: "25m"
+              memory: "64Mi"
+            limits:
+              cpu: "100m"
+              memory: "128Mi"
+      volumes:
+        - name: config
+          configMap:
+            name: alertmanager-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: alertmanager
+  labels:
+    app: parkshare
+    component: alertmanager
+spec:
+  type: ClusterIP
+  selector:
+    app: parkshare
+    component: alertmanager
+  ports:
+    - name: http
+      port: 9093
+      targetPort: http

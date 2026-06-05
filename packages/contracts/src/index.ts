@@ -48,6 +48,12 @@ export interface CreateCheckoutSessionResponseDto {
   checkoutUrl: string;
 }
 
+export interface ReconcileCheckoutSessionResponseDto {
+  booking?: BookingDto;
+  confirmed: boolean;
+  paymentId?: string;
+}
+
 export interface StripeWebhookResponseDto {
   received: true;
   duplicate: boolean;
@@ -63,6 +69,7 @@ export enum BookingStatus {
 
 export interface CreateBookingRequestDto {
   spotId: string;
+  spotLabel: string;
   startAt: string;
   endAt: string;
   amount: number;
@@ -72,6 +79,7 @@ export interface CreateBookingRequestDto {
 export interface BookingDto {
   id: string;
   spotId: string;
+  spotLabel: string;
   driverUserId: string;
   status: BookingStatus;
   amount: number;
@@ -82,3 +90,5 @@ export interface BookingDto {
   createdAt: string;
   updatedAt: string;
 }
+
+export * from './access.js';

@@ -1,0 +1,13 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - backend.yaml
+  - frontend.yaml
+  - prometheus-config.yaml
+  - prometheus-alert-rules.yaml
+  - prometheus.yaml
+  - alertmanager-config.yaml
+  - alertmanager.yaml
+  - alertmanager-discord.yaml
+  - grafana-config.yaml
+  - grafana.yaml

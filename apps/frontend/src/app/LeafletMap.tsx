@@ -1,9 +1,32 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 type MapTheme = "light" | "dark";
 type AuthMode = "login" | "signup";
+type MapSpot = {
+  id: string;
+  title: string;
+  address: string;
+  latitude: number;
+  longitude: number;
+  pricePerHour: number;
+  spaceCount?: number;
+  availableSpaces?: number;
+  availableDays?: string[];
+  availableFrom?: string;
+  availableUntil?: string;
+  description?: string;
+  photoUrls?: string[];
+  hostUser?: {
+    id?: string;
+    name: string;
+    email?: string;
+  };
+  averageRating?: number;
+  reviewCount?: number;
+};
 type AuthUser = {
   id: string;
   email: string;
@@ -14,6 +37,10 @@ type AuthUser = {
 type AuthResponse = {
   user: AuthUser;
   accessToken: string;
+};
+
+type SpotSearchResponse = {
+  data?: MapSpot[];
 };
 
 type PaymentMessage = {
@@ -42,6 +69,38 @@ const tileLayers = {
   },
 } satisfies Record<MapTheme, { base: string; labels: string }>;
 
+const transparentTileUrl =
+  "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==";
+
+function escapeHtml(value: string) {
+  return value.replace(/[&<>"']/g, (character) => {
+    const entities: Record<string, string> = {
+      "&": "&amp;",
+      "<": "&lt;",
+      ">": "&gt;",
+      '"': "&quot;",
+      "'": "&#039;",
+    };
+    return entities[character];
+  });
+}
+
+function getAvailableSpaces(spot: MapSpot): number {
+  return Math.max(spot.availableSpaces ?? spot.spaceCount ?? 1, 0);
+}
+
+function formatAvailableSpaces(availableSpaces: number): string {
+  if (availableSpaces === 0) {
+    return "Fully reserved right now";
+  }
+
+  if (availableSpaces === 1) {
+    return "1 space available now";
+  }
+
+  return `${availableSpaces} spaces available now`;
+}
+
 function readInitialPaymentMessage(): PaymentMessage | null {
   if (typeof window === "undefined") {
     return null;
@@ -66,16 +125,31 @@ function readInitialPaymentMessage(): PaymentMessage | null {
     };
   }
 
+  if (params.get("listing") === "pending") {
+    return {
+      tone: "success",
+      title: "Listing submitted",
+      copy: "Your parking spot is waiting for admin verification.",
+    };
+  }
+
   return null;
 }
 
 export default function LeafletMap() {
+  const router = useRouter();
   const mapRef = useRef<HTMLDivElement | null>(null);
   const leafletRef = useRef<typeof import("leaflet") | null>(null);
   const mapInstanceRef = useRef<import("leaflet").Map | null>(null);
   const tileLayerRefs = useRef<import("leaflet").TileLayer[]>([]);
+  const tileThemeRef = useRef<MapTheme>("light");
+  const spotMarkerRefs = useRef<import("leaflet").Marker[]>([]);
   const [theme, setTheme] = useState<MapTheme>("light");
+  const [isMapReady, setIsMapReady] = useState(false);
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const [garageSearch, setGarageSearch] = useState("");
+  const [mapSpots, setMapSpots] = useState<MapSpot[]>([]);
   const [isAuthOpen, setIsAuthOpen] = useState(false);
   const [authMode, setAuthMode] = useState<AuthMode>("login");
   const [authName, setAuthName] = useState("");
@@ -89,6 +163,31 @@ export default function LeafletMap() {
   const [paymentMessage, setPaymentMessage] = useState<PaymentMessage | null>(
     null,
   );
+
+  const loadSpotMarkers = useCallback(async () => {
+    try {
+      const response = await fetch(`${apiBaseUrl}/api/v1/spots?limit=100`, {
+        cache: "no-store",
+      });
+
+      if (!response.ok) {
+        setMapSpots([]);
+        return;
+      }
+
+      const payload = (await response.json()) as SpotSearchResponse;
+      const backendSpots = payload.data ?? [];
+      const validBackendSpots = backendSpots.filter(
+        (spot) =>
+          Number.isFinite(spot.latitude) && Number.isFinite(spot.longitude),
+      );
+
+      setMapSpots(validBackendSpots);
+    } catch {
+      // Map markers are helpful, but the map itself should stay usable offline.
+      setMapSpots([]);
+    }
+  }, []);
 
   useEffect(() => {
     if (!mapRef.current || mapInstanceRef.current) {
@@ -119,9 +218,16 @@ export default function LeafletMap() {
       mapInstanceRef.current = map;
 
       tileLayerRefs.current = [
-        L.tileLayer(tileLayers.light.base, { maxZoom: 19 }).addTo(map),
-        L.tileLayer(tileLayers.light.labels, { maxZoom: 19 }).addTo(map),
+        L.tileLayer(tileLayers.light.base, {
+          maxZoom: 19,
+          errorTileUrl: transparentTileUrl,
+        }).addTo(map),
+        L.tileLayer(tileLayers.light.labels, {
+          maxZoom: 19,
+          errorTileUrl: transparentTileUrl,
+        }).addTo(map),
       ];
+      setIsMapReady(true);
     }
 
     void loadMap();
@@ -131,6 +237,8 @@ export default function LeafletMap() {
       mapInstanceRef.current?.remove();
       mapInstanceRef.current = null;
       tileLayerRefs.current = [];
+      spotMarkerRefs.current = [];
+      setIsMapReady(false);
     };
   }, []);
 
@@ -142,13 +250,132 @@ export default function LeafletMap() {
       return;
     }
 
-    tileLayerRefs.current.forEach((layer) => layer.remove());
-    tileLayerRefs.current = [
-      L.tileLayer(tileLayers[theme].base, { maxZoom: 19 }).addTo(map),
-      L.tileLayer(tileLayers[theme].labels, { maxZoom: 19 }).addTo(map),
+    if (tileThemeRef.current === theme) {
+      return;
+    }
+
+    const previousLayers = tileLayerRefs.current;
+    let settledTiles = 0;
+    let didSwapLayers = false;
+
+    const nextLayers = [
+      L.tileLayer(tileLayers[theme].base, {
+        maxZoom: 19,
+        opacity: 0,
+        errorTileUrl: transparentTileUrl,
+      }).addTo(map),
+      L.tileLayer(tileLayers[theme].labels, {
+        maxZoom: 19,
+        opacity: 0,
+        errorTileUrl: transparentTileUrl,
+      }).addTo(map),
     ];
+
+    function swapLayers() {
+      if (didSwapLayers) {
+        return;
+      }
+
+      didSwapLayers = true;
+      nextLayers.forEach((layer) => layer.setOpacity(1));
+      previousLayers.forEach((layer) => layer.remove());
+      tileLayerRefs.current = nextLayers;
+      tileThemeRef.current = theme;
+    }
+
+    nextLayers.forEach((layer) => {
+      layer.once("load tileerror", () => {
+        settledTiles += 1;
+
+        if (settledTiles >= nextLayers.length) {
+          swapLayers();
+        }
+      });
+    });
+
+    const fallbackTimer = window.setTimeout(swapLayers, 2200);
+
+    return () => {
+      window.clearTimeout(fallbackTimer);
+      nextLayers.forEach((layer) => {
+        if (!didSwapLayers) {
+          layer.remove();
+        }
+      });
+    };
   }, [theme]);
 
+  useEffect(() => {
+    if (!isMapReady) {
+      return;
+    }
+
+    const initialRefresh = window.setTimeout(() => {
+      void loadSpotMarkers();
+    }, 0);
+
+    const refreshTimer = window.setInterval(() => {
+      void loadSpotMarkers();
+    }, 10000);
+
+    window.addEventListener("focus", loadSpotMarkers);
+
+    return () => {
+      window.clearTimeout(initialRefresh);
+      window.clearInterval(refreshTimer);
+      window.removeEventListener("focus", loadSpotMarkers);
+    };
+  }, [isMapReady, loadSpotMarkers]);
+
+  useEffect(() => {
+    const L = leafletRef.current;
+    const map = mapInstanceRef.current;
+
+    if (!L || !map || !isMapReady) {
+      return;
+    }
+
+    spotMarkerRefs.current.forEach((marker) => marker.remove());
+    spotMarkerRefs.current = mapSpots.map((spot) => {
+      const availableSpaces = getAvailableSpaces(spot);
+      const reserveAction =
+        availableSpaces > 0
+          ? `<a href="/spots/${encodeURIComponent(spot.id)}">Reserve now</a>`
+          : '<span class="garage-popup-full">Fully reserved</span>';
+      const marker = L.marker([spot.latitude, spot.longitude], {
+        icon: L.divIcon({
+          className: "parkshare-map-marker",
+          html: '<span aria-hidden="true"></span>',
+          iconSize: [34, 42],
+          iconAnchor: [17, 40],
+          popupAnchor: [0, -36],
+        }),
+      }).addTo(map);
+
+      marker.bindPopup(
+        `
+          <div class="garage-popup">
+            <strong>${escapeHtml(spot.title)}</strong>
+            <span>${escapeHtml(spot.address)}</span>
+            <em>${(spot.pricePerHour / 100).toFixed(2)} EUR / hour</em>
+            <small>${escapeHtml(formatAvailableSpaces(availableSpaces))}</small>
+            <div>
+              ${reserveAction}
+            </div>
+          </div>
+        `,
+        { closeButton: true, maxWidth: 260 },
+      );
+
+      marker.on("mouseover", () => marker.openPopup());
+      return marker;
+    });
+
+    return () => {
+      spotMarkerRefs.current.forEach((marker) => marker.remove());
+      spotMarkerRefs.current = [];
+    };
+  }, [isMapReady, mapSpots]);
   useEffect(() => {
     const accessToken = localStorage.getItem("parkshare_access_token");
 
@@ -187,8 +414,9 @@ export default function LeafletMap() {
       queueMicrotask(() => setPaymentMessage(initialPaymentMessage));
     }
 
-    if (params.has("payment")) {
+    if (params.has("payment") || params.has("listing")) {
       params.delete("payment");
+      params.delete("listing");
       const queryString = params.toString();
       const replacementUrl = `${window.location.pathname}${
         queryString ? `?${queryString}` : ""
@@ -198,6 +426,16 @@ export default function LeafletMap() {
   }, []);
 
   const nextTheme = theme === "dark" ? "light" : "dark";
+  const normalizedGarageSearch = garageSearch.trim().toLowerCase();
+  const visibleGarageResults = normalizedGarageSearch
+    ? mapSpots
+        .filter((spot) =>
+          `${spot.title} ${spot.address}`
+            .toLowerCase()
+            .includes(normalizedGarageSearch),
+        )
+        .slice(0, 8)
+    : mapSpots.slice(0, 3);
 
   function openAuth(mode: AuthMode) {
     setIsProfileMenuOpen(false);
@@ -289,7 +527,15 @@ export default function LeafletMap() {
     <div className="relative h-screen w-screen" data-map-theme={theme}>
       <div ref={mapRef} className="h-full w-full" />
       <nav className="map-primary-actions" aria-label="Map actions">
-        <button type="button" className="map-primary-action">
+        <button
+          type="button"
+          className="map-primary-action"
+          aria-expanded={isSearchOpen}
+          onClick={() => {
+            setIsSearchOpen((isOpen) => !isOpen);
+            setGarageSearch("");
+          }}
+        >
           <svg
             aria-hidden="true"
             viewBox="0 0 24 24"
@@ -305,7 +551,11 @@ export default function LeafletMap() {
           </svg>
           <span>Search</span>
         </button>
-        <button type="button" className="map-primary-action">
+        <button
+          type="button"
+          className="map-primary-action"
+          onClick={() => router.push("/reservations")}
+        >
           <svg
             aria-hidden="true"
             viewBox="0 0 24 24"
@@ -325,7 +575,11 @@ export default function LeafletMap() {
           </svg>
           <span>Reservations</span>
         </button>
-        <button type="button" className="map-primary-action">
+        <button
+          type="button"
+          className="map-primary-action"
+          onClick={() => router.push("/marketplace/create")}
+        >
           <svg
             aria-hidden="true"
             viewBox="0 0 24 24"
@@ -343,6 +597,56 @@ export default function LeafletMap() {
           <span>List garage</span>
         </button>
       </nav>
+      {isSearchOpen ? (
+        <section className="map-search-panel" aria-label="Garage search">
+          <label className="map-search-field">
+            <svg
+              aria-hidden="true"
+              viewBox="0 0 24 24"
+              className="h-5 w-5"
+              fill="none"
+              stroke="currentColor"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth="2"
+            >
+              <circle cx="11" cy="11" r="7" />
+              <path d="m20 20-3.5-3.5" />
+            </svg>
+            <input
+              type="search"
+              placeholder="Search garages by name"
+              value={garageSearch}
+              onChange={(event) => setGarageSearch(event.target.value)}
+              autoFocus
+            />
+          </label>
+          <div className="map-search-results">
+            {visibleGarageResults.length > 0 ? (
+              visibleGarageResults.map((spot) => (
+                <button
+                  key={spot.id}
+                  type="button"
+                  className="map-search-result"
+                  onClick={() => {
+                    setIsSearchOpen(false);
+                    setGarageSearch("");
+                    router.push(`/spots/${encodeURIComponent(spot.id)}`);
+                  }}
+                >
+                  <span>
+                    <strong>{spot.title}</strong>
+                    <small>{spot.address}</small>
+                  </span>
+                  <b>{(spot.pricePerHour / 100).toFixed(2)} EUR/h</b>
+                </button>
+              ))
+            ) : (
+              <p className="map-search-empty">No garages match that search.</p>
+            )}
+          </div>
+        </section>
+      ) : null}
       {paymentMessage ? (
         <section
           className={`map-payment-toast map-payment-toast-${paymentMessage.tone}`}

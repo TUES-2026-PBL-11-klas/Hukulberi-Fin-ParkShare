@@ -1,0 +1,71 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: grafana
+  labels:
+    app: parkshare
+    component: grafana
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: parkshare
+      component: grafana
+  template:
+    metadata:
+      labels:
+        app: parkshare
+        component: grafana
+    spec:
+      containers:
+        - name: grafana
+          image: grafana/grafana:11.1.5
+          ports:
+            - name: http
+              containerPort: 3000
+          env:
+            - name: GF_SECURITY_ADMIN_USER
+              value: admin
+            - name: GF_SECURITY_ADMIN_PASSWORD
+              value: admin
+          volumeMounts:
+            - name: datasource
+              mountPath: /etc/grafana/provisioning/datasources
+            - name: dashboard-provider
+              mountPath: /etc/grafana/provisioning/dashboards
+            - name: dashboards
+              mountPath: /var/lib/grafana/dashboards
+          resources:
+            requests:
+              cpu: "50m"
+              memory: "128Mi"
+            limits:
+              cpu: "250m"
+              memory: "256Mi"
+      volumes:
+        - name: datasource
+          configMap:
+            name: grafana-datasources
+        - name: dashboard-provider
+          configMap:
+            name: grafana-dashboard-provider
+        - name: dashboards
+          configMap:
+            name: grafana-dashboards
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: grafana
+  labels:
+    app: parkshare
+    component: grafana
+spec:
+  type: ClusterIP
+  selector:
+    app: parkshare
+    component: grafana
+  ports:
+    - name: http
+      port: 3000
+      targetPort: http

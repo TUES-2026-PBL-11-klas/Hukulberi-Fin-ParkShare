@@ -16,11 +16,14 @@ export interface StripeCheckoutSession {
   id: string;
   url: string | null;
   payment_intent: string | null | object;
+  payment_status?: string;
+  status?: string | null;
+  metadata?: Record<string, string> | null;
 }
 
 export interface StripeWebhookObject {
   id: string;
-  metadata?: Record<string, string>;
+  metadata?: Record<string, string> | null;
   payment_intent?: string | null | object;
 }
 
@@ -67,6 +70,12 @@ export class StripeClientService {
       success_url: input.successUrl,
       cancel_url: input.cancelUrl,
     });
+  }
+
+  async retrieveCheckoutSession(
+    checkoutSessionId: string,
+  ): Promise<StripeCheckoutSession> {
+    return this.stripe.checkout.sessions.retrieve(checkoutSessionId);
   }
 
   constructWebhookEvent(

@@ -19,7 +19,6 @@ spec:
     spec:
       containers:
         - name: backend
-          # Replace with the immutable sha-* tag published by the CD workflow.
           image: docker.io/darkata/parkshare-backend:sha-REPLACE_ME
           imagePullPolicy: IfNotPresent
           ports:
@@ -33,6 +32,11 @@ spec:
                 secretKeyRef:
                   name: parkshare-backend-secrets
                   key: DATABASE_URL
+            - name: DIRECT_URL
+              valueFrom:
+                secretKeyRef:
+                  name: parkshare-backend-secrets
+                  key: DIRECT_URL
             - name: JWT_SECRET
               valueFrom:
                 secretKeyRef:

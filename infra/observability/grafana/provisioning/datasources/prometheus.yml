@@ -1,0 +1,39 @@
+apiVersion: 1
+
+# Datasources to be added or updated by provisioning
+datasources:
+  # Prometheus datasource
+  - name: Prometheus
+    type: prometheus
+    access: proxy
+    url: http://prometheus:9090
+    isDefault: true
+    jsonData:
+      timeInterval: 30s
+      manageAlerts: true
+    editable: true
+
+  # Loki datasource (optional, for logs)
+  # Uncomment if you set up Loki for centralized logging
+  # - name: Loki
+  #   type: loki
+  #   access: proxy
+  #   url: http://loki:3100
+  #   jsonData:
+  #     maxLines: 1000
+  #   editable: true
+
+  # AlertManager datasource (for alert state)
+  - name: AlertManager
+    type: alertmanager
+    access: proxy
+    url: http://alertmanager:9093
+    jsonData:
+      implementation: prometheus
+    editable: true
+
+# Delete any datasources that don't match below
+deleteDatasources: []
+
+# Delete all other datasources (be careful with this)
+deleteDataSourcesFromUI: false
