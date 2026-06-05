@@ -19,7 +19,6 @@ spec:
     spec:
       containers:
         - name: backend
-          # Replace with the immutable sha-* tag published by the CD workflow.
           image: docker.io/darkata/parkshare-backend:sha-REPLACE_ME
           imagePullPolicy: IfNotPresent
           ports:

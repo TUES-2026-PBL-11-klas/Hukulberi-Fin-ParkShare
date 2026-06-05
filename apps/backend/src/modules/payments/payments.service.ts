@@ -14,6 +14,8 @@ import {
 import {
   CreateCheckoutSessionRequestDto,
   CreateCheckoutSessionResponseDto,
+  ReconcileCheckoutSessionResponseDto,
+  type BookingDto,
   StripeWebhookResponseDto,
 } from '@parkshare/contracts';
 import {
@@ -27,6 +29,11 @@ import { PrismaService } from '../prisma/prisma.service';
 const DEFAULT_PAYMENT_NAME = 'ParkShare parking reservation';
 
 interface CreateCheckoutSessionInput extends CreateCheckoutSessionRequestDto {
+  userId: string;
+}
+
+interface ReconcileCheckoutSessionInput {
+  checkoutSessionId: string;
   userId: string;
 }
 
@@ -45,6 +52,18 @@ export class PaymentsService {
       input.userId,
       input.bookingId,
     );
+    const existingSucceededPayment = await this.prisma.payment.findFirst({
+      where: {
+        bookingId: booking.id,
+        driverUserId: input.userId,
+        status: PaymentStatus.SUCCEEDED,
+      },
+    });
+
+    if (existingSucceededPayment) {
+      throw new BadRequestException('Reservation is already paid for');
+    }
+
     const amount = booking.amount;
     const currency = booking.currency.toLowerCase();
     const name = `${DEFAULT_PAYMENT_NAME} · ${booking.spotLabel}`;
@@ -190,6 +209,41 @@ export class PaymentsService {
     };
   }
 
+  async reconcileCheckoutSession(
+    input: ReconcileCheckoutSessionInput,
+  ): Promise<ReconcileCheckoutSessionResponseDto> {
+    const session = await this.stripeClient.retrieveCheckoutSession(
+      input.checkoutSessionId,
+    );
+
+    if (session.payment_status !== 'paid') {
+      return { confirmed: false };
+    }
+
+    const paymentId = session.metadata?.paymentId;
+    const bookingId = session.metadata?.bookingId;
+
+    if (!paymentId || !bookingId || session.metadata?.userId !== input.userId) {
+      throw new UnauthorizedException(
+        'Checkout session does not belong to this user',
+      );
+    }
+
+    const confirmed = await this.markPaidSessionSucceeded(
+      session,
+      input.userId,
+    );
+    const booking = await this.prisma.booking.findUnique({
+      where: { id: bookingId },
+    });
+
+    return {
+      booking: booking ? this.toBookingDto(booking) : undefined,
+      confirmed,
+      paymentId,
+    };
+  }
+
   private async applyWebhookToPayment(
     event: StripeWebhookEvent,
   ): Promise<void> {
@@ -211,35 +265,23 @@ export class PaymentsService {
     }
 
     const session = event.data.object;
-    const paymentId = session.metadata?.paymentId;
 
-    if (!paymentId) {
+    if (!session.metadata?.paymentId) {
       return;
     }
 
-    const paymentUpdate = await this.prisma.payment.updateMany({
+    if (event.type === 'checkout.session.completed') {
+      await this.markPaidSessionSucceeded(session);
+      return;
+    }
+
+    await this.prisma.payment.updateMany({
       where: {
-        id: paymentId,
+        id: session.metadata.paymentId,
         providerCheckoutSessionId: session.id,
       },
-      data: {
-        providerPaymentIntentId:
-          typeof session.payment_intent === 'string'
-            ? session.payment_intent
-            : undefined,
-        status:
-          event.type === 'checkout.session.completed'
-            ? PaymentStatus.SUCCEEDED
-            : PaymentStatus.CANCELED,
-      },
+      data: { status: PaymentStatus.CANCELED },
     });
-
-    if (
-      event.type === 'checkout.session.completed' &&
-      paymentUpdate.count > 0
-    ) {
-      await this.confirmBookingFromSession(session);
-    }
   }
 
   private extractPaymentId(event: StripeWebhookEvent): string | undefined {
@@ -264,25 +306,114 @@ export class PaymentsService {
 
   private async confirmBookingFromSession(
     session: StripeWebhookObject,
-  ): Promise<void> {
+  ): Promise<boolean> {
     const bookingId = session.metadata?.bookingId;
     const userId = session.metadata?.userId;
 
     if (!bookingId || !userId) {
-      return;
+      return false;
     }
 
-    await this.prisma.booking.updateMany({
+    try {
+      const updated = await this.prisma.booking.updateMany({
+        where: {
+          driverUserId: userId,
+          id: bookingId,
+          status: { in: [BookingStatus.HOLD, BookingStatus.EXPIRED] },
+        },
+        data: {
+          status: BookingStatus.CONFIRMED,
+        },
+      });
+
+      if (updated?.count > 0) {
+        return true;
+      }
+    } catch (error) {
+      if (!this.isActiveBookingOverlapError(error)) {
+        throw error;
+      }
+    }
+
+    const booking = await this.prisma.booking.findUnique({
+      where: { id: bookingId },
+      select: { status: true },
+    });
+
+    return booking?.status === BookingStatus.CONFIRMED;
+  }
+
+  private async markPaidSessionSucceeded(
+    session: StripeWebhookObject,
+    userId?: string,
+  ): Promise<boolean> {
+    const paymentId = session.metadata?.paymentId;
+
+    if (!paymentId) {
+      return false;
+    }
+
+    const paymentUpdate = await this.prisma.payment.updateMany({
       where: {
-        driverUserId: userId,
-        expiresAt: { gt: new Date() },
-        id: bookingId,
-        status: BookingStatus.HOLD,
+        id: paymentId,
+        providerCheckoutSessionId: session.id,
+        ...(userId ? { driverUserId: userId } : {}),
       },
       data: {
-        status: BookingStatus.CONFIRMED,
+        providerPaymentIntentId:
+          typeof session.payment_intent === 'string'
+            ? session.payment_intent
+            : undefined,
+        status: PaymentStatus.SUCCEEDED,
       },
     });
+
+    if (paymentUpdate.count === 0) {
+      return false;
+    }
+
+    return this.confirmBookingFromSession(session);
+  }
+
+  private isActiveBookingOverlapError(error: unknown): boolean {
+    if (
+      !(error instanceof Prisma.PrismaClientKnownRequestError) ||
+      error.code !== 'P2004'
+    ) {
+      return false;
+    }
+
+    return error.message.includes('bookings_no_active_overlap');
+  }
+
+  private toBookingDto(booking: {
+    id: string;
+    spotId: string;
+    spotLabel: string;
+    driverUserId: string;
+    status: BookingStatus;
+    amount: number;
+    currency: string;
+    startAt: Date;
+    endAt: Date;
+    expiresAt: Date;
+    createdAt: Date;
+    updatedAt: Date;
+  }): BookingDto {
+    return {
+      id: booking.id,
+      spotId: booking.spotId,
+      spotLabel: booking.spotLabel,
+      driverUserId: booking.driverUserId,
+      status: booking.status as BookingDto['status'],
+      amount: booking.amount,
+      currency: booking.currency,
+      startAt: booking.startAt.toISOString(),
+      endAt: booking.endAt.toISOString(),
+      expiresAt: booking.expiresAt.toISOString(),
+      createdAt: booking.createdAt.toISOString(),
+      updatedAt: booking.updatedAt.toISOString(),
+    };
   }
 
   private async requireBookingForCheckout(userId: string, bookingId?: string) {

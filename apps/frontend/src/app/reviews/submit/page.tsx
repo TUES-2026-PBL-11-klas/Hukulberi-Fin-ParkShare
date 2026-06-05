@@ -98,7 +98,7 @@ function SubmitReviewPageContent() {
     <div className="min-h-screen bg-slate-50 p-6 md:p-12">
       <div className="max-w-xl mx-auto">
         <Link 
-          href={`/spots/${spotId}`} 
+          href={spotId ? `/spots/${spotId}` : "/"} 
           className="inline-flex items-center gap-2 text-slate-500 hover:text-slate-800 transition-colors mb-8 font-medium"
         >
           <ArrowLeft size={18} />
