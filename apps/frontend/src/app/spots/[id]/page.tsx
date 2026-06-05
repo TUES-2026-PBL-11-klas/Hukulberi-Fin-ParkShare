@@ -238,6 +238,7 @@ function getAvailableDateOptions(spot: SpotDetails | null): ReservationDefaults[
   const availableFrom = spot.availableFrom ?? "08:00";
   const availableUntil = spot.availableUntil ?? "20:00";
   const options: ReservationDefaults[] = [];
+  const now = new Date();
   const cursor = new Date();
   cursor.setHours(12, 0, 0, 0);
 
@@ -245,13 +246,31 @@ function getAvailableDateOptions(spot: SpotDetails | null): ReservationDefaults[
     const candidate = new Date(cursor);
     candidate.setDate(cursor.getDate() + dayOffset);
 
-    if (availableDays.includes(weekdayKeys[candidate.getDay()])) {
-      options.push({
-        date: toDateInputValue(candidate),
-        startTime: availableFrom,
-        endTime: addOneHourWithinWindow(availableFrom, availableUntil),
-      });
+    if (!availableDays.includes(weekdayKeys[candidate.getDay()])) {
+      continue;
     }
+
+    let startTime = availableFrom;
+    const candidateDate = toDateInputValue(candidate);
+
+    if (candidateDate === toDateInputValue(now)) {
+      const roundedStart = roundUpToNextHour(now);
+      startTime = toTimeInputValue(roundedStart) > availableFrom
+        ? toTimeInputValue(roundedStart)
+        : availableFrom;
+    }
+
+    const endTime = addOneHourWithinWindow(startTime, availableUntil);
+
+    if (startTime >= availableUntil || endTime <= startTime) {
+      continue;
+    }
+
+    options.push({
+      date: candidateDate,
+      startTime,
+      endTime,
+    });
   }
 
   return options;
