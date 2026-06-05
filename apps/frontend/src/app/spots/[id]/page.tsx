@@ -42,6 +42,12 @@ type ApiErrorResponse = {
 };
 
 type ReviewRatingValue = NonNullable<SpotDetails["reviews"]>[number]["rating"];
+const weekdayKeys = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"];
+type ReservationDefaults = {
+  date: string;
+  startTime: string;
+  endTime: string;
+};
 
 function readErrorMessage(payload: unknown): string {
   if (typeof payload === "object" && payload !== null && "message" in payload) {
@@ -80,6 +86,31 @@ function toDateTimeInputValue(date: Date): string {
   return new Date(date.getTime() - offsetMs).toISOString().slice(0, 16);
 }
 
+function toDateInputValue(date: Date): string {
+  return toDateTimeInputValue(date).slice(0, 10);
+}
+
+function toTimeInputValue(date: Date): string {
+  return toDateTimeInputValue(date).slice(11, 16);
+}
+
+function combineLocalDateTime(date: string, time: string): Date {
+  return new Date(`${date}T${time}`);
+}
+
+function addOneHourWithinWindow(startTime: string, availableUntil: string): string {
+  const [startHour, startMinute] = startTime.split(":").map(Number);
+  const [untilHour, untilMinute] = availableUntil.split(":").map(Number);
+  const end = new Date(2000, 0, 1, startHour, startMinute, 0, 0);
+  end.setHours(end.getHours() + 1);
+  const latestEnd = new Date(2000, 0, 1, untilHour, untilMinute, 0, 0);
+  const selectedEnd = end <= latestEnd ? end : latestEnd;
+
+  return `${String(selectedEnd.getHours()).padStart(2, "0")}:${String(
+    selectedEnd.getMinutes(),
+  ).padStart(2, "0")}`;
+}
+
 function roundUpToNextHour(date: Date): Date {
   const next = new Date(date);
   next.setMinutes(0, 0, 0);
@@ -99,6 +130,165 @@ function getDefaultReservationTimes() {
   return {
     startAt: toDateTimeInputValue(roundedStart),
     endAt: toDateTimeInputValue(roundedEnd),
+  };
+}
+
+function getReservationValidationMessage(
+  spot: SpotDetails | null,
+  selectedDate: string,
+  startTime: string,
+  endTime: string,
+): string {
+  if (!spot || !selectedDate || !startTime || !endTime) {
+    return "";
+  }
+
+  const startDate = combineLocalDateTime(selectedDate, startTime);
+  const endDate = combineLocalDateTime(selectedDate, endTime);
+
+  if (Number.isNaN(startDate.getTime()) || Number.isNaN(endDate.getTime())) {
+    return "Choose valid reservation times.";
+  }
+
+  if (startDate >= endDate) {
+    return "Check-out must be after check-in.";
+  }
+
+  if (startDate < new Date()) {
+    return "Choose a check-in time in the future.";
+  }
+
+  const selectedDay = weekdayKeys[startDate.getDay()];
+  const availableDays = spot.availableDays ?? [];
+
+  if (availableDays.length > 0 && !availableDays.includes(selectedDay)) {
+    return `This spot is only available on ${formatAvailabilityDays(availableDays)}.`;
+  }
+
+  const availableFrom = spot.availableFrom ?? "08:00";
+  const availableUntil = spot.availableUntil ?? "20:00";
+
+  if (startTime < availableFrom || endTime > availableUntil) {
+    return `Choose a time between ${availableFrom} and ${availableUntil}.`;
+  }
+
+  return "";
+}
+
+function getNextAvailableReservationTimes(spot: SpotDetails): {
+  date: string;
+  startTime: string;
+  endTime: string;
+} {
+  const availableDays = spot.availableDays?.length
+    ? spot.availableDays
+    : ["MON", "TUE", "WED", "THU", "FRI"];
+  const availableFrom = spot.availableFrom ?? "08:00";
+  const availableUntil = spot.availableUntil ?? "20:00";
+  const now = new Date();
+
+  for (let dayOffset = 0; dayOffset < 14; dayOffset += 1) {
+    const candidate = new Date(now);
+    candidate.setDate(now.getDate() + dayOffset);
+
+    if (!availableDays.includes(weekdayKeys[candidate.getDay()])) {
+      continue;
+    }
+
+    const [fromHour, fromMinute] = availableFrom.split(":").map(Number);
+    const [untilHour, untilMinute] = availableUntil.split(":").map(Number);
+    const start = new Date(candidate);
+    start.setHours(fromHour, fromMinute, 0, 0);
+
+    if (start <= now) {
+      start.setHours(now.getHours() + 1, 0, 0, 0);
+    }
+
+    const end = new Date(start);
+    end.setHours(start.getHours() + 1, start.getMinutes(), 0, 0);
+    const latestEnd = new Date(candidate);
+    latestEnd.setHours(untilHour, untilMinute, 0, 0);
+
+    if (start > now && end <= latestEnd) {
+      return {
+        date: toDateInputValue(start),
+        startTime: toTimeInputValue(start),
+        endTime: toTimeInputValue(end),
+      };
+    }
+  }
+
+  const fallback = getDefaultReservationTimes();
+
+  return {
+    date: fallback.startAt.slice(0, 10),
+    startTime: fallback.startAt.slice(11, 16),
+    endTime: fallback.endAt.slice(11, 16),
+  };
+}
+
+function getAvailableDateOptions(spot: SpotDetails | null): ReservationDefaults[] {
+  if (!spot) {
+    return [];
+  }
+
+  const availableDays = spot.availableDays?.length
+    ? spot.availableDays
+    : ["MON", "TUE", "WED", "THU", "FRI"];
+  const availableFrom = spot.availableFrom ?? "08:00";
+  const availableUntil = spot.availableUntil ?? "20:00";
+  const options: ReservationDefaults[] = [];
+  const now = new Date();
+  const cursor = new Date();
+  cursor.setHours(12, 0, 0, 0);
+
+  for (let dayOffset = 0; dayOffset < 21 && options.length < 6; dayOffset += 1) {
+    const candidate = new Date(cursor);
+    candidate.setDate(cursor.getDate() + dayOffset);
+
+    if (!availableDays.includes(weekdayKeys[candidate.getDay()])) {
+      continue;
+    }
+
+    let startTime = availableFrom;
+    const candidateDate = toDateInputValue(candidate);
+
+    if (candidateDate === toDateInputValue(now)) {
+      const roundedStart = roundUpToNextHour(now);
+      startTime = toTimeInputValue(roundedStart) > availableFrom
+        ? toTimeInputValue(roundedStart)
+        : availableFrom;
+    }
+
+    const endTime = addOneHourWithinWindow(startTime, availableUntil);
+
+    if (startTime >= availableUntil || endTime <= startTime) {
+      continue;
+    }
+
+    options.push({
+      date: candidateDate,
+      startTime,
+      endTime,
+    });
+  }
+
+  return options;
+}
+
+function formatReservationDay(date: string): { day: string; date: string } {
+  const parsedDate = combineLocalDateTime(date, "12:00");
+  const parts = new Intl.DateTimeFormat("en", {
+    day: "numeric",
+    month: "short",
+    weekday: "short",
+  }).formatToParts(parsedDate);
+
+  return {
+    day: parts.find((part) => part.type === "weekday")?.value ?? "",
+    date: `${parts.find((part) => part.type === "month")?.value ?? ""} ${
+      parts.find((part) => part.type === "day")?.value ?? ""
+    }`.trim(),
   };
 }
 
@@ -181,20 +371,11 @@ export default function SpotInfoPage() {
   const [isLoading, setIsLoading] = useState(!spot);
   const [error, setError] = useState("");
   const [selectedPhotoIndex, setSelectedPhotoIndex] = useState(0);
-  const [startAt, setStartAt] = useState("");
-  const [endAt, setEndAt] = useState("");
+  const [selectedDate, setSelectedDate] = useState("");
+  const [startTime, setStartTime] = useState("");
+  const [endTime, setEndTime] = useState("");
   const [bookingError, setBookingError] = useState("");
   const [isCreatingBooking, setIsCreatingBooking] = useState(false);
-
-  useEffect(() => {
-    const defaultTimer = window.setTimeout(() => {
-      const defaults = getDefaultReservationTimes();
-      setStartAt(defaults.startAt);
-      setEndAt(defaults.endAt);
-    }, 0);
-
-    return () => window.clearTimeout(defaultTimer);
-  }, []);
 
   useEffect(() => {
     if (!spotId || mockGarages.some((garage) => garage.id === spotId)) {
@@ -230,6 +411,21 @@ export default function SpotInfoPage() {
     void loadSpot();
   }, [spotId]);
 
+  useEffect(() => {
+    if (!spot) {
+      return;
+    }
+
+    const fillTimer = window.setTimeout(() => {
+      const defaults = getNextAvailableReservationTimes(spot);
+      setSelectedDate((current) => current || defaults.date);
+      setStartTime((current) => current || defaults.startTime);
+      setEndTime((current) => current || defaults.endTime);
+    }, 0);
+
+    return () => window.clearTimeout(fillTimer);
+  }, [spot]);
+
   const ratingLabel = useMemo(() => {
     if (!spot?.averageRating || !spot.reviewCount) {
       return "No reviews yet";
@@ -239,15 +435,15 @@ export default function SpotInfoPage() {
   }, [spot]);
 
   const bookingSummary = useMemo(() => {
-    if (!spot || !startAt || !endAt) {
+    if (!spot || !selectedDate || !startTime || !endTime) {
       return {
         amount: 0,
         hours: 0,
       };
     }
 
-    const startDate = new Date(startAt);
-    const endDate = new Date(endAt);
+    const startDate = combineLocalDateTime(selectedDate, startTime);
+    const endDate = combineLocalDateTime(selectedDate, endTime);
     const durationMs = endDate.getTime() - startDate.getTime();
     const hours = durationMs > 0 ? durationMs / (60 * 60 * 1000) : 0;
 
@@ -255,7 +451,16 @@ export default function SpotInfoPage() {
       amount: Math.round(hours * spot.pricePerHour),
       hours,
     };
-  }, [endAt, spot, startAt]);
+  }, [endTime, selectedDate, spot, startTime]);
+  const reservationValidationMessage = useMemo(
+    () => getReservationValidationMessage(spot, selectedDate, startTime, endTime),
+    [endTime, selectedDate, spot, startTime],
+  );
+  const availableDateOptions = useMemo(() => getAvailableDateOptions(spot), [spot]);
+  const canReserve =
+    !reservationValidationMessage &&
+    bookingSummary.amount > 0 &&
+    !isCreatingBooking;
 
   async function handleReserveNow() {
     setBookingError("");
@@ -276,21 +481,11 @@ export default function SpotInfoPage() {
       return;
     }
 
-    const startDate = new Date(startAt);
-    const endDate = new Date(endAt);
+    const startDate = combineLocalDateTime(selectedDate, startTime);
+    const endDate = combineLocalDateTime(selectedDate, endTime);
 
-    if (!startAt || !endAt || startDate >= endDate) {
-      setBookingError("Choose a valid check-in and check-out time.");
-      return;
-    }
-
-    if (startDate < new Date()) {
-      setBookingError("Choose a check-in time in the future.");
-      return;
-    }
-
-    if (bookingSummary.amount <= 0) {
-      setBookingError("Reservation total must be greater than zero.");
+    if (reservationValidationMessage) {
+      setBookingError(reservationValidationMessage);
       return;
     }
 
@@ -404,6 +599,15 @@ export default function SpotInfoPage() {
             </p>
           </div>
 
+          <div className="spot-hero-host">
+            <span>{spot.hostUser?.name?.charAt(0).toUpperCase() || "P"}</span>
+            <div>
+              <small>Hosted by</small>
+              <strong>{spot.hostUser?.name || "ParkShare host"}</strong>
+              <em>{spot.hostUser?.email || "Verified through ParkShare"}</em>
+            </div>
+          </div>
+
           <div className="spot-summary-row">
             <span>
               <Star aria-hidden="true" />
@@ -472,21 +676,52 @@ export default function SpotInfoPage() {
               <h2>Hourly rate</h2>
               <strong>{formatPrice(spot.pricePerHour)}</strong>
             </div>
-            <div className="spot-reservation-fields">
+            <div className="spot-reservation-days" aria-label="Choose reservation day">
+              {availableDateOptions.map((option) => {
+                const label = formatReservationDay(option.date);
+                const isSelected = selectedDate === option.date;
+
+                return (
+                  <button
+                    key={option.date}
+                    type="button"
+                    className={
+                      isSelected
+                        ? "spot-day-option spot-day-option-selected"
+                        : "spot-day-option"
+                    }
+                    aria-pressed={isSelected}
+                    onClick={() => {
+                      setSelectedDate(option.date);
+                      setStartTime(option.startTime);
+                      setEndTime(option.endTime);
+                    }}
+                  >
+                    <strong>{label.day}</strong>
+                    <span>{label.date}</span>
+                  </button>
+                );
+              })}
+            </div>
+            <div className="spot-reservation-fields spot-reservation-time-grid">
               <label>
-                <span>Check-in</span>
+                <span>From</span>
                 <input
-                  type="datetime-local"
-                  value={startAt}
-                  onChange={(event) => setStartAt(event.target.value)}
+                  type="time"
+                  min={spot.availableFrom ?? "08:00"}
+                  max={spot.availableUntil ?? "20:00"}
+                  value={startTime}
+                  onChange={(event) => setStartTime(event.target.value)}
                 />
               </label>
               <label>
-                <span>Check-out</span>
+                <span>Until</span>
                 <input
-                  type="datetime-local"
-                  value={endAt}
-                  onChange={(event) => setEndAt(event.target.value)}
+                  type="time"
+                  min={spot.availableFrom ?? "08:00"}
+                  max={spot.availableUntil ?? "20:00"}
+                  value={endTime}
+                  onChange={(event) => setEndTime(event.target.value)}
                 />
               </label>
             </div>
@@ -494,25 +729,18 @@ export default function SpotInfoPage() {
               <span>{bookingSummary.hours > 0 ? `${bookingSummary.hours.toFixed(1)} hours` : "Choose times"}</span>
               <strong>{formatPrice(bookingSummary.amount)}</strong>
             </div>
+            {reservationValidationMessage ? (
+              <p className="spot-booking-warning">{reservationValidationMessage}</p>
+            ) : null}
             {bookingError ? <p className="spot-booking-error">{bookingError}</p> : null}
             <button
               type="button"
+              className="spot-reserve-button"
               onClick={handleReserveNow}
-              disabled={isCreatingBooking}
+              disabled={!canReserve}
             >
               {isCreatingBooking ? "Creating hold..." : "Reserve now"}
             </button>
-          </section>
-
-          <section>
-            <h2>Host</h2>
-            <div className="spot-host-card">
-              <span>{spot.hostUser?.name?.charAt(0).toUpperCase() || "P"}</span>
-              <div>
-                <strong>{spot.hostUser?.name || "ParkShare host"}</strong>
-                <small>{spot.hostUser?.email || "Verified through ParkShare"}</small>
-              </div>
-            </div>
           </section>
         </aside>
       </section>
