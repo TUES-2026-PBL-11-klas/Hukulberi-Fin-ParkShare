@@ -18,6 +18,7 @@ import {
   UpdateSpotDto,
   SearchSpotsDto,
   UpdateSpotVerificationDto,
+  UpdateSpotActiveDto,
 } from './dto';
 
 @Injectable()
@@ -376,6 +377,28 @@ export class SpotsService {
         isActive:
           updateSpotVerificationDto.status === SpotVerificationStatus.VERIFIED,
       },
+      include: {
+        hostUser: {
+          select: { id: true, name: true, email: true, status: true },
+        },
+      },
+    });
+
+    void this.updateActiveSpots();
+
+    return updated;
+  }
+
+  async updateSpotActive(id: string, updateSpotActiveDto: UpdateSpotActiveDto) {
+    const spot = await this.prisma.spot.findUnique({ where: { id } });
+
+    if (!spot) {
+      throw new NotFoundException(`Spot with ID ${id} not found`);
+    }
+
+    const updated = await this.prisma.spot.update({
+      where: { id },
+      data: { isActive: updateSpotActiveDto.isActive },
       include: {
         hostUser: {
           select: { id: true, name: true, email: true, status: true },

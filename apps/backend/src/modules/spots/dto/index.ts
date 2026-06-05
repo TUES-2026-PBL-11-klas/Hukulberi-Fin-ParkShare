@@ -179,3 +179,8 @@ export class UpdateSpotVerificationDto {
   @IsString()
   note?: string;
 }
+
+export class UpdateSpotActiveDto {
+  @IsBoolean()
+  isActive: boolean;
+}
