@@ -14,30 +14,6 @@ type ApiErrorResponse = {
   message?: string | string[];
 };
 
-type CheckoutStep = {
-  label: string;
-  title: string;
-  copy: string;
-};
-
-const checkoutSteps: CheckoutStep[] = [
-  {
-    label: "01",
-    title: "Review reservation",
-    copy: "The booking details come from ParkShare, not from the browser.",
-  },
-  {
-    label: "02",
-    title: "Pay in Stripe",
-    copy: "Stripe collects the card details in test mode and returns safely.",
-  },
-  {
-    label: "03",
-    title: "Confirm booking",
-    copy: "ParkShare confirms the reservation after payment verification.",
-  },
-];
-
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
@@ -123,19 +99,6 @@ function getStatusClasses(status: BookingDto["status"]): string {
   if (status === "CONFIRMED") return "bg-emerald-100 text-emerald-800";
   if (status === "CANCELED") return "bg-rose-100 text-rose-700";
   return "bg-slate-200 text-slate-700";
-}
-
-function StripeWordmark() {
-  return (
-    <svg
-      aria-hidden="true"
-      viewBox="0 0 64 26"
-      className="h-5 w-12"
-      fill="currentColor"
-    >
-      <path d="M6.9 9.7c0-1.1.9-1.5 2.4-1.5 2.1 0 4.8.6 6.9 1.8V3.5C13.9 2.6 11.6 2.3 9.3 2.3 3.7 2.3 0 5.2 0 10.1c0 7.5 10.4 6.3 10.4 9.5 0 1.2-1.1 1.7-2.6 1.7-2.3 0-5.2-.9-7.6-2.2v6.6c2.6 1.1 5.2 1.5 7.6 1.5 5.7 0 9.7-2.8 9.7-7.8-.1-8.2-10.6-6.8-10.6-9.7ZM26 4.7l-7 1.5-.1 16.2c0 3 2.3 5.2 5.3 5.2 1.7 0 2.9-.3 3.6-.7v-5.7c-.7.3-3.9 1.2-3.9-1.8v-7.1h3.9V6.5h-3.9l.1-1.8ZM35.2 8.2l-.4-1.7h-6.2v20.6h7.1V13.2c1.7-2.2 4.5-1.8 5.4-1.5V6.5c-.9-.4-4.2-1.1-5.9 1.7ZM42.2 6.5h7.1v20.6h-7.1V6.5Zm0-6.2h7.1v4.9h-7.1V.3ZM57.5 6.1c-2.8 0-4.6 1.3-5.6 2.2l-.4-1.8h-6.2v27.4l7.1-1.5.1-6.7c1 .7 2.4 1.5 4.8 1.5 4.9 0 9.3-3.9 9.3-10.7 0-6.3-4.4-10.4-9.1-10.4Zm-1.7 14.9c-1.6 0-2.6-.6-3.3-1.3l-.1-6.6c.7-.8 1.8-1.4 3.4-1.4 2.6 0 4.3 2.9 4.3 4.7 0 1.9-1.7 4.6-4.3 4.6Z" />
-    </svg>
-  );
 }
 
 function CheckoutPageContent() {
@@ -350,8 +313,8 @@ function CheckoutPageContent() {
           </section>
         ) : null}
 
-        <section className="grid items-start gap-6 lg:grid-cols-[minmax(0,1.15fr)_minmax(360px,0.85fr)]">
-          <article className="grid gap-6 rounded-2xl bg-white p-6 shadow-sm md:p-8">
+        <section className="grid items-stretch gap-6 lg:grid-cols-[minmax(0,1.08fr)_minmax(360px,0.92fr)]">
+          <article className="grid h-full content-start gap-6 rounded-2xl bg-white p-6 shadow-sm md:p-8">
             <div>
               <p className="text-sm font-bold uppercase tracking-[0.22em] text-slate-500">
                 Reservation
@@ -410,23 +373,9 @@ function CheckoutPageContent() {
                   </div>
                 </div>
 
-                <div className="grid gap-4 rounded-2xl bg-emerald-50 p-5 text-emerald-950">
-                  <div>
-                    <p className="text-sm font-bold text-emerald-700">
-                      Booking id
-                    </p>
-                    <p className="mt-1 break-all text-sm font-bold">
-                      {booking.id}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-sm font-bold text-emerald-700">
-                      Spot id
-                    </p>
-                    <p className="mt-1 break-all text-sm font-bold">
-                      {booking.spotId}
-                    </p>
-                  </div>
+                <div className="rounded-2xl bg-emerald-50 p-5 text-sm font-bold leading-6 text-emerald-900">
+                  Pay with Stripe to confirm this reservation. After payment,
+                  it will appear as confirmed in your reservations.
                 </div>
               </>
             ) : (
@@ -443,20 +392,19 @@ function CheckoutPageContent() {
             ) : null}
           </article>
 
-          <aside className="grid gap-6 lg:sticky lg:top-6">
-            <section className="rounded-2xl bg-white p-6 shadow-sm md:p-8">
-              <div className="flex items-start justify-between gap-4">
-                <div>
-                  <p className="text-sm font-bold uppercase tracking-[0.22em] text-slate-500">
-                    Payment
-                  </p>
-                  <h2 className="mt-3 font-[var(--font-manrope)] text-2xl font-bold tracking-tight text-slate-950">
-                    {amount}
-                  </h2>
-                </div>
-                <span className="rounded-full bg-[#f6f2ff] px-4 py-2 text-sm font-black text-[#635bff]">
-                  TEST MODE
-                </span>
+          <aside className="h-full">
+            <section className="flex h-full flex-col rounded-2xl bg-white p-6 shadow-sm md:p-8">
+              <div>
+                <p className="text-sm font-bold uppercase tracking-[0.22em] text-slate-500">
+                  Payment
+                </p>
+                <h2 className="mt-3 font-[var(--font-manrope)] text-4xl font-black tracking-tight text-slate-950">
+                  {amount}
+                </h2>
+                <p className="mt-3 text-sm font-medium leading-6 text-slate-500">
+                  Complete payment to lock this reservation. ParkShare confirms
+                  it after Stripe returns a successful checkout.
+                </p>
               </div>
 
               {booking?.status === "CONFIRMED" ? (
@@ -473,44 +421,37 @@ function CheckoutPageContent() {
                 </div>
               ) : null}
 
-              <button
-                type="button"
-                onClick={handleCheckout}
-                disabled={!canPay || isSubmitting}
-                className="mt-6 inline-flex h-16 w-full items-center justify-center gap-3 rounded-2xl bg-[#635bff] px-6 text-lg font-black text-white shadow-[0_18px_36px_rgba(99,91,255,0.28)] transition hover:bg-[#5548f5] active:scale-[0.99] disabled:cursor-not-allowed disabled:bg-slate-300 disabled:text-slate-500 disabled:shadow-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#635bff] focus-visible:ring-offset-2"
-              >
-                <StripeWordmark />
-                <span>{isSubmitting ? "Opening..." : "Pay with Stripe"}</span>
-              </button>
-
-              <p className="mt-4 text-sm leading-6 text-slate-500">
-                Use Stripe test card `4242 4242 4242 4242` with any future
-                expiry date and any CVC.
-              </p>
-            </section>
-
-            <section className="rounded-2xl bg-slate-900 p-6 text-white shadow-sm md:p-8">
-              <p className="text-sm font-bold uppercase tracking-[0.22em] text-emerald-300">
-                Flow
-              </p>
-              <div className="mt-5 grid gap-3">
-                {checkoutSteps.map((step) => (
-                  <div key={step.label} className="rounded-2xl bg-white/7 p-4">
-                    <div className="flex items-start gap-3">
-                      <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-emerald-400 text-sm font-black text-slate-950">
-                        {step.label}
-                      </span>
-                      <div>
-                        <h3 className="font-[var(--font-manrope)] text-base font-bold">
-                          {step.title}
-                        </h3>
-                        <p className="mt-1 text-sm leading-6 text-slate-300">
-                          {step.copy}
-                        </p>
-                      </div>
-                    </div>
+              <div className="mt-auto grid gap-4 pt-8">
+                <div className="grid gap-3 rounded-2xl bg-slate-100 p-5">
+                  <div className="flex items-center justify-between gap-4">
+                    <span className="text-sm font-bold text-slate-500">
+                      Reservation total
+                    </span>
+                    <strong className="text-lg font-black text-slate-950">
+                      {amount}
+                    </strong>
                   </div>
-                ))}
+                  <div className="flex items-center justify-between gap-4">
+                    <span className="text-sm font-bold text-slate-500">
+                      Processing
+                    </span>
+                    <strong className="text-lg font-black text-emerald-800">
+                      Stripe
+                    </strong>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={handleCheckout}
+                  disabled={!canPay || isSubmitting}
+                  className="inline-flex h-16 w-full items-center justify-center gap-3 rounded-2xl bg-[#635bff] px-6 text-lg font-black text-white shadow-[0_18px_36px_rgba(99,91,255,0.28)] transition hover:bg-[#5548f5] active:scale-[0.99] disabled:cursor-not-allowed disabled:bg-slate-300 disabled:text-slate-500 disabled:shadow-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#635bff] focus-visible:ring-offset-2"
+                >
+                  <span className="font-[Arial] text-2xl font-black tracking-[-0.06em]">
+                    Stripe
+                  </span>
+                  <span>{isSubmitting ? "Opening..." : "Pay with Stripe"}</span>
+                </button>
               </div>
             </section>
           </aside>
