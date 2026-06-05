@@ -8,6 +8,7 @@ import { PaymentsModule } from './modules/payments/payments.module';
 import { PrismaModule } from './modules/prisma/prisma.module';
 import { SpotsModule } from './modules/spots/spots.module';
 import { ReviewsModule } from './modules/reviews/reviews.module';
+import { UsersModule } from './modules/users/users.module';
 
 import { AccessModule } from './modules/access/access.module';
 
@@ -16,6 +17,7 @@ import { AccessModule } from './modules/access/access.module';
     PrismaModule,
     MetricsModule,
     AuthModule,
+    UsersModule,
     BookingsModule,
     PaymentsModule,
     SpotsModule,

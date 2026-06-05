@@ -9,7 +9,6 @@ import {
   Query,
   UseGuards,
   Patch,
-  ForbiddenException,
 } from '@nestjs/common';
 import { SpotsService } from './spots.service';
 import {
@@ -20,10 +19,29 @@ import {
 } from './dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CurrentUser } from '../auth/current-user.decorator';
+import { RolesGuard } from '../auth/roles.guard';
+import { Roles } from '../auth/roles.decorator';
+import { UserRole } from '@prisma/client';
 
 @Controller('api/v1/spots')
 export class SpotsController {
   constructor(private readonly spotsService: SpotsService) {}
+
+  /**
+   * Admin-only: List all spots for moderation
+   */
+  @Get('admin/list')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
+  async adminList(
+    @Query('limit') limit?: number,
+    @Query('offset') offset?: number,
+  ) {
+    return this.spotsService.adminListSpots(
+      limit ? Number(limit) : 50,
+      offset ? Number(offset) : 0,
+    );
+  }
 
   /**
    * Create a new parking spot (HOST only)
@@ -67,16 +85,12 @@ export class SpotsController {
   }
 
   @Patch(':id/verification')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
   async verify(
     @Param('id') id: string,
     @Body() updateSpotVerificationDto: UpdateSpotVerificationDto,
-    @CurrentUser() user: { id: string; role: string },
   ) {
-    if (user.role !== 'ADMIN') {
-      throw new ForbiddenException('Only admins can verify spots');
-    }
-
     return this.spotsService.updateSpotVerification(
       id,
       updateSpotVerificationDto,
