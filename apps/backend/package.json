@@ -61,6 +61,7 @@
     "typescript-eslint": "^8.20.0"
   },
   "jest": {
+    "preset": "ts-jest",
     "moduleFileExtensions": [
       "js",
       "json",
@@ -73,7 +74,7 @@
     },
     "moduleNameMapper": {
       "^(\\.{1,2}/.*)\\.js$": "$1",
-      "^@parkshare/contracts$": "<rootDir>/../../../packages/contracts/src"
+      "^@parkshare/contracts$": "<rootDir>/test-contracts.cjs"
     },
     "collectCoverageFrom": [
       "**/*.(t|j)s"
