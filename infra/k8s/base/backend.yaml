@@ -32,6 +32,11 @@ spec:
                 secretKeyRef:
                   name: parkshare-backend-secrets
                   key: DATABASE_URL
+            - name: DIRECT_URL
+              valueFrom:
+                secretKeyRef:
+                  name: parkshare-backend-secrets
+                  key: DIRECT_URL
             - name: JWT_SECRET
               valueFrom:
                 secretKeyRef:

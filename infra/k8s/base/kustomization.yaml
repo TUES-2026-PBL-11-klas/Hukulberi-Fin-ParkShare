@@ -3,3 +3,10 @@ kind: Kustomization
 resources:
   - backend.yaml
   - frontend.yaml
+  - prometheus-config.yaml
+  - prometheus-alert-rules.yaml
+  - prometheus.yaml
+  - alertmanager-config.yaml
+  - alertmanager.yaml
+  - grafana-config.yaml
+  - grafana.yaml
