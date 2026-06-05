@@ -287,24 +287,30 @@ body {
 }
 
 .parkshare-map-marker {
+  position: relative;
   display: grid;
   place-items: center;
-  border-radius: 9999px;
-  background: linear-gradient(135deg, #34d399, #14b8a6);
-  color: #ffffff;
-  box-shadow: 0 14px 28px rgb(15 23 42 / 0.25);
+  background: transparent;
 }
 
 .parkshare-map-marker span {
-  display: inline-flex;
-  min-width: 3.25rem;
-  height: 2.25rem;
-  align-items: center;
-  justify-content: center;
+  position: relative;
+  display: block;
+  width: 1.75rem;
+  height: 1.75rem;
+  border: 0.24rem solid #ffffff;
+  border-radius: 9999px 9999px 9999px 0.28rem;
+  background: linear-gradient(135deg, #34d399, #14b8a6);
+  box-shadow: 0 12px 24px rgb(15 23 42 / 0.28);
+  transform: rotate(-45deg);
+}
+
+.parkshare-map-marker span::after {
+  position: absolute;
+  inset: 0.4rem;
+  content: "";
   border-radius: 9999px;
-  color: #ffffff;
-  font-size: 0.875rem;
-  font-weight: 900;
+  background: #ffffff;
 }
 
 .leaflet-popup-content {
@@ -345,8 +351,7 @@ body {
 }
 
 .garage-popup div {
-  display: flex;
-  gap: 0.45rem;
+  display: block;
   padding-top: 0.25rem;
 }
 
@@ -363,11 +368,6 @@ body {
   font-weight: 850;
   padding: 0 0.7rem;
   text-decoration: none;
-}
-
-.garage-popup a + a {
-  background: #ecfdf5;
-  color: #006c49;
 }
 
 .map-profile-button {

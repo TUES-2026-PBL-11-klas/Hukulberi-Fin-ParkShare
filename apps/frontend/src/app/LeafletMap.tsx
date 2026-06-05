@@ -295,10 +295,10 @@ export default function LeafletMap() {
       const marker = L.marker([spot.latitude, spot.longitude], {
         icon: L.divIcon({
           className: "parkshare-map-marker",
-          html: `<span>${(spot.pricePerHour / 100).toFixed(0)} EUR</span>`,
-          iconSize: [70, 38],
-          iconAnchor: [35, 38],
-          popupAnchor: [0, -34],
+          html: '<span aria-hidden="true"></span>',
+          iconSize: [34, 42],
+          iconAnchor: [17, 40],
+          popupAnchor: [0, -36],
         }),
       }).addTo(map);
 
@@ -310,7 +310,6 @@ export default function LeafletMap() {
             <em>${(spot.pricePerHour / 100).toFixed(2)} EUR / hour</em>
             <div>
               <a href="/spots/${encodeURIComponent(spot.id)}">Reserve now</a>
-              <a href="/spots/${encodeURIComponent(spot.id)}">More info</a>
             </div>
           </div>
         `,
