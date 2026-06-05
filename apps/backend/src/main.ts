@@ -1,5 +1,6 @@
 import './config/load-env';
 import { NestFactory } from '@nestjs/core';
+import { ValidationPipe } from '@nestjs/common';
 import { json, urlencoded } from 'express';
 import type { Request } from 'express';
 import { AppModule } from './app.module';
@@ -13,6 +14,14 @@ async function bootstrap() {
     rawBody: true,
     bodyParser: false,
   });
+
+  app.useGlobalPipes(
+    new ValidationPipe({
+      whitelist: true,
+      transform: true,
+    }),
+  );
+
   app.use(
     json({
       limit: '8mb',

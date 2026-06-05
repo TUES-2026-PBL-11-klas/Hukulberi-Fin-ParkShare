@@ -376,6 +376,39 @@ export default function SpotInfoPage() {
   const [endTime, setEndTime] = useState("");
   const [bookingError, setBookingError] = useState("");
   const [isCreatingBooking, setIsCreatingBooking] = useState(false);
+  const [reviewableBookingId, setReviewableBookingId] = useState<string | null>(null);
+
+  useEffect(() => {
+    const accessToken = readToken();
+    if (!accessToken || !spotId) return;
+
+    async function findReviewableBooking() {
+      try {
+        const response = await fetch(`${apiBaseUrl}/api/v1/bookings`, {
+          headers: { Authorization: `Bearer ${accessToken}` },
+        });
+        if (!response.ok) return;
+
+        const bookings = (await response.json()) as Array<{
+          id: string;
+          spotId: string;
+          status: string;
+        }>;
+
+        const match = bookings.find(
+          (b) => b.spotId === spotId && b.status === "CONFIRMED"
+        );
+
+        if (match) {
+          setReviewableBookingId(match.id);
+        }
+      } catch {
+        // Silently fail, user just won't see the review button
+      }
+    }
+
+    void findReviewableBooking();
+  }, [spotId]);
 
   useEffect(() => {
     if (!spotId || mockGarages.some((garage) => garage.id === spotId)) {
@@ -758,12 +791,13 @@ export default function SpotInfoPage() {
             <h2>Reviews</h2>
             <span>{ratingLabel}</span>
           </div>
-          {readToken() && (
+          {reviewableBookingId && (
             <Link 
-              href={`/reviews/submit?spotId=${spot.id}&bookingId=demo-booking`} 
-              className="text-xs font-bold uppercase tracking-widest bg-amber-100 text-amber-700 px-4 py-2 rounded-xl hover:bg-amber-200 transition-all"
+              href={`/reviews/submit?spotId=${spot.id}&bookingId=${reviewableBookingId}`} 
+              className="text-xs font-bold uppercase tracking-widest bg-amber-100 text-amber-700 px-5 py-2.5 rounded-2xl hover:bg-amber-200 transition-all flex items-center gap-2 shadow-lg shadow-amber-50"
             >
-              Write a review
+              <Star size={14} fill="currentColor" />
+              Rate your stay
             </Link>
           )}
         </div>
