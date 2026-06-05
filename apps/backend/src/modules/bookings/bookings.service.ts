@@ -130,6 +130,22 @@ export class BookingsService implements OnModuleInit, OnModuleDestroy {
 
     await this.expireOverdueHoldsOnce();
 
+    const activeDriverBooking = await this.prisma.booking.findFirst({
+      where: {
+        driverUserId: input.driverUserId,
+        status: {
+          in: [PrismaBookingStatus.HOLD, PrismaBookingStatus.CONFIRMED],
+        },
+        endAt: { gt: new Date() },
+      },
+    });
+
+    if (activeDriverBooking) {
+      throw new ConflictException(
+        'Cancel or complete your active reservation before creating another one',
+      );
+    }
+
     const overlap = await this.prisma.booking.findFirst({
       where: {
         spotId: input.spotId,
