@@ -17,6 +17,10 @@ import {
 } from 'class-validator';
 import { SpotVerificationStatus } from '@prisma/client';
 
+const UPDATE_SPOT_VERIFICATION_STATUSES = [
+  'VERIFIED',
+  'REJECTED',
+] as const satisfies readonly SpotVerificationStatus[];
 const availabilityDays = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'];
 const timePattern = /^([01]\d|2[0-3]):[0-5]\d$/;
 
@@ -161,8 +165,8 @@ export class SearchSpotsDto {
 }
 
 export class UpdateSpotVerificationDto {
-  @IsIn([SpotVerificationStatus.VERIFIED, SpotVerificationStatus.REJECTED])
-  status: SpotVerificationStatus;
+  @IsIn(UPDATE_SPOT_VERIFICATION_STATUSES)
+  status: (typeof UPDATE_SPOT_VERIFICATION_STATUSES)[number];
 
   @IsOptional()
   @IsString()

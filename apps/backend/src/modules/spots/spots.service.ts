@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-unsafe-assignment,@typescript-eslint/no-unsafe-member-access */
 import {
   Injectable,
   BadRequestException,
@@ -7,7 +6,7 @@ import {
   Logger,
 } from '@nestjs/common';
 import { Counter, Histogram, Gauge, register } from 'prom-client';
-import { ReviewRating, SpotVerificationStatus } from '@prisma/client';
+import { Prisma, ReviewRating, SpotVerificationStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import {
   CreateSpotDto,
@@ -112,7 +111,7 @@ export class SpotsService {
     );
 
     // Build where clause
-    const where: any = {
+    const where: Prisma.SpotWhereInput = {
       isActive: true,
       verificationStatus: SpotVerificationStatus.VERIFIED,
     };
@@ -172,8 +171,9 @@ export class SpotsService {
     });
 
     const duration = (Date.now() - startTime) / 1000;
+    const resultCount = Array.isArray(spots) ? spots.length : 0;
     this.searchDuration.observe(duration);
-    this.searchResults.observe(spots.length);
+    this.searchResults.observe(resultCount);
 
     // Calculate average rating for each spot
     const ratingMap: Record<ReviewRating, number> = {
@@ -378,7 +378,7 @@ export class SpotsService {
   /**
    * Get all spots by a specific host
    */
-  async getSpotsByHost(hostUserId: string) {
+  getSpotsByHost(hostUserId: string) {
     return this.prisma.spot.findMany({
       where: { hostUserId },
       include: {

@@ -99,7 +99,7 @@ export class SpotsController {
    * Get spots by host user
    */
   @Get('host/:hostUserId')
-  async getByHost(@Param('hostUserId') hostUserId: string) {
+  getByHost(@Param('hostUserId') hostUserId: string) {
     return this.spotsService.getSpotsByHost(hostUserId);
   }
 }
