@@ -125,6 +125,7 @@ describe('SpotsService', () => {
           updatedAt: new Date(),
           hostUser: { id: 'user-1', name: 'Host 1' },
           reviews: [],
+          bookings: [{ id: 'booking-1' }],
         },
       ];
 
@@ -134,6 +135,7 @@ describe('SpotsService', () => {
       const result = await service.searchSpots({});
 
       expect(result.data).toHaveLength(1);
+      expect(result.data[0]).toMatchObject({ availableSpaces: 1 });
       expect(result.total).toBe(1);
     });
 
@@ -175,7 +177,7 @@ describe('SpotsService', () => {
         updatedAt: new Date(),
         hostUser: { id: 'user-1', name: 'Host 1', email: 'host@example.com' },
         reviews: [],
-        bookings: [],
+        bookings: [{ id: 'booking-1' }],
       };
 
       const findFirstSpot = jest
@@ -186,6 +188,7 @@ describe('SpotsService', () => {
 
       expect(result).toBeDefined();
       expect(result.id).toBe('1');
+      expect(result).toMatchObject({ availableSpaces: 1 });
       expect(findFirstSpot).toHaveBeenCalledWith(
         expect.objectContaining({
           where: {

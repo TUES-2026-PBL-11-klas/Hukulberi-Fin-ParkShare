@@ -64,6 +64,22 @@ function escapeHtml(value: string) {
   });
 }
 
+function getAvailableSpaces(spot: MapSpot): number {
+  return Math.max(spot.availableSpaces ?? spot.spaceCount ?? 1, 0);
+}
+
+function formatAvailableSpaces(availableSpaces: number): string {
+  if (availableSpaces === 0) {
+    return "Fully reserved right now";
+  }
+
+  if (availableSpaces === 1) {
+    return "1 space available now";
+  }
+
+  return `${availableSpaces} spaces available now`;
+}
+
 function readInitialPaymentMessage(): PaymentMessage | null {
   if (typeof window === "undefined") {
     return null;
@@ -302,6 +318,11 @@ export default function LeafletMap() {
 
     spotMarkerRefs.current.forEach((marker) => marker.remove());
     spotMarkerRefs.current = mapSpots.map((spot) => {
+      const availableSpaces = getAvailableSpaces(spot);
+      const reserveAction =
+        availableSpaces > 0
+          ? `<a href="/spots/${encodeURIComponent(spot.id)}">Reserve now</a>`
+          : '<span class="garage-popup-full">Fully reserved</span>';
       const marker = L.marker([spot.latitude, spot.longitude], {
         icon: L.divIcon({
           className: "parkshare-map-marker",
@@ -318,8 +339,9 @@ export default function LeafletMap() {
             <strong>${escapeHtml(spot.title)}</strong>
             <span>${escapeHtml(spot.address)}</span>
             <em>${(spot.pricePerHour / 100).toFixed(2)} EUR / hour</em>
+            <small>${escapeHtml(formatAvailableSpaces(availableSpaces))}</small>
             <div>
-              <a href="/spots/${encodeURIComponent(spot.id)}">Reserve now</a>
+              ${reserveAction}
             </div>
           </div>
         `,

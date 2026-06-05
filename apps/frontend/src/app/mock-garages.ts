@@ -6,6 +6,7 @@ export type MapSpot = {
   longitude: number;
   pricePerHour: number;
   spaceCount?: number;
+  availableSpaces?: number;
   availableDays?: string[];
   availableFrom?: string;
   availableUntil?: string;

@@ -47,7 +47,9 @@ const baseSpot = {
 describe('BookingsService', () => {
   let service: BookingsService;
   let prisma: {
+    $transaction: jest.Mock;
     booking: {
+      count: jest.Mock;
       create: jest.Mock;
       findFirst: jest.Mock;
       findMany: jest.Mock;
@@ -62,7 +64,11 @@ describe('BookingsService', () => {
 
   beforeEach(() => {
     prisma = {
+      $transaction: jest.fn((callback: (tx: typeof prisma) => unknown) =>
+        callback(prisma),
+      ),
       booking: {
+        count: jest.fn(),
         create: jest.fn(),
         findFirst: jest.fn(),
         findMany: jest.fn(),
@@ -75,6 +81,7 @@ describe('BookingsService', () => {
       },
     };
     prisma.spot.findUnique.mockResolvedValue(baseSpot);
+    prisma.booking.count.mockResolvedValue(0);
 
     service = new BookingsService(prisma as unknown as PrismaService);
   });
@@ -150,8 +157,14 @@ describe('BookingsService', () => {
     await Promise.all([firstHold, secondHold]);
   });
 
-  it('rejects a hold that overlaps an active booking', async () => {
-    prisma.booking.findFirst.mockResolvedValue(baseBooking);
+  it('allows overlapping bookings while the spot still has free spaces', async () => {
+    prisma.spot.findUnique.mockResolvedValue({
+      ...baseSpot,
+      spaceCount: 2,
+    });
+    prisma.booking.findFirst.mockResolvedValue(null);
+    prisma.booking.count.mockResolvedValue(1);
+    prisma.booking.create.mockResolvedValue(baseBooking);
 
     await expect(
       service.createHold({
@@ -162,7 +175,39 @@ describe('BookingsService', () => {
         spotId: baseBooking.spotId,
         startAt: baseBooking.startAt.toISOString(),
       }),
-    ).rejects.toBeInstanceOf(ConflictException);
+    ).resolves.toMatchObject({ id: baseBooking.id });
+
+    expect(prisma.booking.count).toHaveBeenCalledWith({
+      where: {
+        spotId: baseBooking.spotId,
+        status: {
+          in: [BookingStatus.HOLD, BookingStatus.CONFIRMED],
+        },
+        startAt: { lt: baseBooking.endAt },
+        endAt: { gt: baseBooking.startAt },
+      },
+    });
+    expect(prisma.booking.create).toHaveBeenCalled();
+  });
+
+  it('rejects a hold when every spot space is already reserved', async () => {
+    prisma.spot.findUnique.mockResolvedValue({
+      ...baseSpot,
+      spaceCount: 2,
+    });
+    prisma.booking.findFirst.mockResolvedValue(null);
+    prisma.booking.count.mockResolvedValue(2);
+
+    await expect(
+      service.createHold({
+        amount: 1200,
+        driverUserId: baseBooking.driverUserId,
+        endAt: baseBooking.endAt.toISOString(),
+        spotLabel: baseBooking.spotLabel,
+        spotId: baseBooking.spotId,
+        startAt: baseBooking.startAt.toISOString(),
+      }),
+    ).rejects.toThrow('No spaces are available for the selected time range');
 
     expect(prisma.booking.create).not.toHaveBeenCalled();
   });
