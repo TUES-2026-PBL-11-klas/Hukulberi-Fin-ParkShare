@@ -9,6 +9,8 @@ import { PrismaModule } from './modules/prisma/prisma.module';
 import { SpotsModule } from './modules/spots/spots.module';
 import { ReviewsModule } from './modules/reviews/reviews.module';
 
+import { AccessModule } from './modules/access/access.module';
+
 @Module({
   imports: [
     PrismaModule,
@@ -18,6 +20,7 @@ import { ReviewsModule } from './modules/reviews/reviews.module';
     PaymentsModule,
     SpotsModule,
     ReviewsModule,
+    AccessModule,
   ],
   controllers: [AppController],
   providers: [AppService],
