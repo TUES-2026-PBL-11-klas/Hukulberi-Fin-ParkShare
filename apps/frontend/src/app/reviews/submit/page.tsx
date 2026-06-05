@@ -3,7 +3,7 @@
 import React, { Suspense, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { Star, ArrowLeft, Send, CheckCircle2 } from 'lucide-react';
+import { Star, ArrowLeft, Send, CheckCircle2, Loader2 } from 'lucide-react';
 
 const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:3001";
 
@@ -98,7 +98,7 @@ function SubmitReviewPageContent() {
     <div className="min-h-screen bg-slate-50 p-6 md:p-12">
       <div className="max-w-xl mx-auto">
         <Link 
-          href={`/spots/${spotId}`} 
+          href={spotId ? `/spots/${spotId}` : "/"} 
           className="inline-flex items-center gap-2 text-slate-500 hover:text-slate-800 transition-colors mb-8 font-medium"
         >
           <ArrowLeft size={18} />
