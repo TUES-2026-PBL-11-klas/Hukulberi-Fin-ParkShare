@@ -2,6 +2,10 @@
 
 ParkShare is a parking marketplace where hosts list private parking spaces and drivers reserve them through a map-first booking flow. The app includes authentication, host listings, admin verification, reservations, Stripe test payments, observability, and deployment manifests.
 
+## Problem Solved
+
+In busy cities, drivers waste time searching for parking while many private garages, courtyards, and spaces stay unused for parts of the day. ParkShare connects drivers with verified private parking spots and gives hosts a way to list available capacity with photos, coordinates, schedule, and hourly pricing.
+
 ## Features
 
 - Driver signup, login, sign out, protected reservations, and access actions
@@ -31,12 +35,23 @@ docs/             Mermaid diagrams and architecture notes
 
 ## Tech Stack
 
-- Frontend: Next.js, React, Leaflet, Tailwind CSS, lucide-react
-- Backend: NestJS, Prisma, PostgreSQL, Stripe SDK, prom-client
-- Database: Supabase PostgreSQL
-- Payments: Stripe Checkout and webhooks
-- Infra: Docker, GitHub Actions, Kubernetes, Kustomize, ArgoCD
-- Observability: Prometheus, Grafana, Alertmanager, Discord webhook bridge
+| Area | Technology | Version / Notes |
+| --- | --- | --- |
+| Runtime | Node.js | 22+ |
+| Frontend | Next.js | 16.2.6 |
+| Frontend | React | 19.2.4 |
+| Map | Leaflet | 1.9.4 |
+| Icons | lucide-react | 1.17.0 |
+| Backend | NestJS | 11.x |
+| ORM | Prisma | 6.19.3 |
+| Database | PostgreSQL / Supabase | Managed PostgreSQL |
+| Payments | Stripe SDK | 22.1.1 |
+| Metrics | prom-client | 15.1.3 |
+| CI/CD | GitHub Actions | Repository workflows |
+| Containers | Docker | Backend and frontend images |
+| Orchestration | Kubernetes + Kustomize | Base + dev/prod overlays |
+| GitOps | ArgoCD | Application manifests |
+| Observability | Prometheus, Grafana, Alertmanager | Discord notifications |
 
 ## Documentation
 
@@ -48,6 +63,12 @@ Diagrams live in [docs](./docs/README.md):
 - [UML](./docs/uml.md)
 - [Booking and Payment Flow](./docs/booking-payment-flow.md)
 - [Admin Moderation Flow](./docs/admin-moderation-flow.md)
+- [API Endpoints](./docs/api-endpoints.md)
+- [Formal Bulgarian Documentation](./docs/project-documentation.md)
+
+## Architecture Diagram
+
+The main architecture diagram is in [docs/architecture.md](./docs/architecture.md). GitHub renders the Mermaid diagram directly in the Markdown file.
 
 ## Prerequisites
 
@@ -114,6 +135,49 @@ Default local URLs:
 
 - Frontend: `http://localhost:3000`
 - Backend: `http://localhost:3001`
+
+## Docker Setup
+
+Build the backend image:
+
+```bash
+docker build -t parkshare-backend -f apps/backend/Dockerfile .
+```
+
+Build the frontend image:
+
+```bash
+docker build -t parkshare-frontend -f apps/frontend/Dockerfile .
+```
+
+Run the backend container with environment variables:
+
+```bash
+docker run --env-file .env -p 3001:3001 parkshare-backend
+```
+
+Run the frontend container:
+
+```bash
+docker run -p 3000:3000 parkshare-frontend
+```
+
+For Kubernetes deployment, use the Kustomize overlays under `infra/k8s/overlays`.
+
+## API Endpoints
+
+The API reference is documented in [docs/api-endpoints.md](./docs/api-endpoints.md).
+
+Main groups:
+
+- Auth: signup, login, current user
+- Users: admin user status changes
+- Spots: search, create, edit, admin verification, enable/disable
+- Bookings: create, list, view, cancel
+- Payments: Stripe Checkout, reconciliation, webhooks
+- Reviews: create and list reviews
+- Access: booking unlock/access action
+- Metrics: Prometheus metrics
 
 ## Stripe Webhooks
 
