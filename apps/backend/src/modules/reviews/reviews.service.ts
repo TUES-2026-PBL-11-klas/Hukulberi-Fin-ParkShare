@@ -18,11 +18,16 @@ export class ReviewsService {
   }
 
   private initializeMetrics() {
-    this.reviewsCreated = new Counter({
-      name: 'parkshare_marketplace_reviews_created_total',
-      help: 'Total reviews written',
-      registers: [register],
-    });
+    const existingMetric = register.getSingleMetric('parkshare_marketplace_reviews_created_total');
+    if (existingMetric) {
+      this.reviewsCreated = existingMetric as Counter;
+    } else {
+      this.reviewsCreated = new Counter({
+        name: 'parkshare_marketplace_reviews_created_total',
+        help: 'Total reviews written',
+        registers: [register],
+      });
+    }
   }
 
   /**
