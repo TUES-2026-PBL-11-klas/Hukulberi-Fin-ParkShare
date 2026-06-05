@@ -559,9 +559,16 @@ export default function SpotInfoPage() {
         <Link href="/" className="spot-info-back">
           Back to map
         </Link>
-        <Link href="/marketplace/create" className="spot-info-host-link">
-          List garage
-        </Link>
+        <div className="flex gap-4">
+          <Link href="/marketplace/create" className="spot-info-host-link">
+            List garage
+          </Link>
+          {spot.hostUser?.id && readToken() && (
+            <Link href={`/marketplace/edit/${spot.id}`} className="spot-info-host-link bg-slate-100 text-slate-800">
+              Edit Listing
+            </Link>
+          )}
+        </div>
       </header>
 
       <section className="spot-info-hero">
@@ -747,8 +754,18 @@ export default function SpotInfoPage() {
 
       <section className="spot-reviews">
         <div className="spot-reviews-heading">
-          <h2>Reviews</h2>
-          <span>{ratingLabel}</span>
+          <div>
+            <h2>Reviews</h2>
+            <span>{ratingLabel}</span>
+          </div>
+          {readToken() && (
+            <Link 
+              href={`/reviews/submit?spotId=${spot.id}&bookingId=demo-booking`} 
+              className="text-xs font-bold uppercase tracking-widest bg-amber-100 text-amber-700 px-4 py-2 rounded-xl hover:bg-amber-200 transition-all"
+            >
+              Write a review
+            </Link>
+          )}
         </div>
 
         {reviews.length > 0 ? (
