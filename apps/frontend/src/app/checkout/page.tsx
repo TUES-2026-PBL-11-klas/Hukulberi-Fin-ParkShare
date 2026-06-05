@@ -147,7 +147,7 @@ function CheckoutPageContent() {
         throw new Error("Missing booking id.");
       }
 
-      const successUrl = new URL("/", window.location.origin);
+      const successUrl = new URL("/reservations", window.location.origin);
       successUrl.searchParams.set("payment", "success");
       const cancelUrl = new URL("/", window.location.origin);
       cancelUrl.searchParams.set("payment", "cancel");

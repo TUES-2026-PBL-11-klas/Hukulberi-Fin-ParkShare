@@ -1,12 +1,24 @@
 'use client';
 
-import React, { useState, useEffect, useRef } from 'react';
-import { useRouter, useParams } from 'next/navigation';
+import React, { useEffect, useMemo, useState } from 'react';
+import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { ArrowLeft, Save, Trash2, Loader2, AlertCircle } from 'lucide-react';
-import '../../create/create-spot.css';
+import {
+  AlertCircle,
+  ArrowLeft,
+  CalendarDays,
+  Clock3,
+  Euro,
+  Loader2,
+  MapPin,
+  Save,
+  ShieldCheck,
+  Trash2,
+  Warehouse,
+} from 'lucide-react';
 
-const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:3001";
+const apiBaseUrl =
+  process.env.NEXT_PUBLIC_API_BASE_URL ?? 'http://localhost:3001';
 
 const weekDays = [
   { value: 'MON', label: 'Mon' },
@@ -16,100 +28,182 @@ const weekDays = [
   { value: 'FRI', label: 'Fri' },
   { value: 'SAT', label: 'Sat' },
   { value: 'SUN', label: 'Sun' },
-];
+] as const;
+
+type SpotFormData = {
+  title: string;
+  description: string;
+  address: string;
+  latitude: number;
+  longitude: number;
+  pricePerHour: string;
+  spaceCount: number;
+  availableDays: string[];
+  availableFrom: string;
+  availableUntil: string;
+};
+
+const initialFormData: SpotFormData = {
+  title: '',
+  description: '',
+  address: '',
+  latitude: 0,
+  longitude: 0,
+  pricePerHour: '',
+  spaceCount: 1,
+  availableDays: [],
+  availableFrom: '08:00',
+  availableUntil: '20:00',
+};
+
+function formatSelectedDays(days: string[]) {
+  if (days.length === 0) {
+    return 'No days selected';
+  }
+
+  return weekDays
+    .filter((day) => days.includes(day.value))
+    .map((day) => day.label)
+    .join(', ');
+}
 
 export default function EditSpotPage() {
   const router = useRouter();
-  const { id } = useParams();
-  
+  const params = useParams<{ id: string }>();
+  const id = params.id;
+
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  
-  const [formData, setFormData] = useState({
-    title: '',
-    description: '',
-    address: '',
-    latitude: 0,
-    longitude: 0,
-    pricePerHour: '',
-    spaceCount: 1,
-    availableDays: [] as string[],
-    availableFrom: '08:00',
-    availableUntil: '20:00',
-  });
+  const [formData, setFormData] = useState<SpotFormData>(initialFormData);
 
   useEffect(() => {
     async function fetchSpot() {
       try {
         const response = await fetch(`${apiBaseUrl}/api/v1/spots/${id}`);
-        if (!response.ok) throw new Error('Failed to fetch spot details');
-        const data = await response.json();
-        
+        if (!response.ok) {
+          throw new Error('Failed to fetch spot details');
+        }
+
+        const data = (await response.json()) as Partial<SpotFormData> & {
+          pricePerHour?: number;
+        };
+
         setFormData({
-          title: data.title,
-          description: data.description || '',
-          address: data.address,
-          latitude: data.latitude,
-          longitude: data.longitude,
-          pricePerHour: (data.pricePerHour / 100).toString(),
-          spaceCount: data.spaceCount || 1,
-          availableDays: data.availableDays || [],
-          availableFrom: data.availableFrom || '08:00',
-          availableUntil: data.availableUntil || '20:00',
+          title: data.title ?? '',
+          description: data.description ?? '',
+          address: data.address ?? '',
+          latitude: Number(data.latitude ?? 0),
+          longitude: Number(data.longitude ?? 0),
+          pricePerHour:
+            typeof data.pricePerHour === 'number'
+              ? (data.pricePerHour / 100).toString()
+              : '',
+          spaceCount: Number(data.spaceCount ?? 1),
+          availableDays: Array.isArray(data.availableDays)
+            ? data.availableDays
+            : [],
+          availableFrom: data.availableFrom ?? '08:00',
+          availableUntil: data.availableUntil ?? '20:00',
         });
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to fetch spot details');
+        setError(
+          err instanceof Error ? err.message : 'Failed to fetch spot details',
+        );
       } finally {
         setLoading(false);
       }
     }
-    fetchSpot();
+
+    void fetchSpot();
   }, [id]);
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-    const { name, value } = e.target;
-    setFormData(prev => ({ ...prev, [name]: value }));
+  const pricePreview = useMemo(() => {
+    const value = Number.parseFloat(formData.pricePerHour);
+    return Number.isFinite(value) ? `EUR ${value.toFixed(2)} / hour` : 'No price';
+  }, [formData.pricePerHour]);
+
+  const validationMessage = useMemo(() => {
+    if (!formData.title.trim()) {
+      return 'Title is required.';
+    }
+    if (!formData.address.trim()) {
+      return 'Address is required.';
+    }
+    if (formData.availableDays.length === 0) {
+      return 'Choose at least one available day.';
+    }
+    if (formData.availableFrom >= formData.availableUntil) {
+      return 'Available from time must be earlier than available until time.';
+    }
+
+    const price = Number.parseFloat(formData.pricePerHour);
+    if (!Number.isFinite(price) || price < 0) {
+      return 'Hourly price must be a valid number.';
+    }
+
+    return null;
+  }, [formData]);
+
+  const handleInputChange = (
+    event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>,
+  ) => {
+    const { name, value } = event.target;
+    setFormData((previous) => ({ ...previous, [name]: value }));
   };
 
   const toggleDay = (day: string) => {
-    setFormData(prev => ({
-      ...prev,
-      availableDays: prev.availableDays.includes(day)
-        ? prev.availableDays.filter(d => d !== day)
-        : [...prev.availableDays, day]
+    setFormData((previous) => ({
+      ...previous,
+      availableDays: previous.availableDays.includes(day)
+        ? previous.availableDays.filter((selected) => selected !== day)
+        : [...previous.availableDays, day],
     }));
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setSaving(true);
+  const handleSubmit = async (event: React.FormEvent) => {
+    event.preventDefault();
     setError(null);
+
+    if (validationMessage) {
+      setError(validationMessage);
+      return;
+    }
 
     const token = localStorage.getItem('parkshare_access_token');
     if (!token) {
       setError('Please log in to update your listing.');
-      setSaving(false);
       return;
     }
 
+    setSaving(true);
+
     try {
       const response = await fetch(`${apiBaseUrl}/api/v1/spots/${id}`, {
-        method: 'PATCH',
+        method: 'PUT',
         headers: {
+          Authorization: `Bearer ${token}`,
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
         },
         body: JSON.stringify({
-          ...formData,
-          pricePerHour: Math.round(parseFloat(formData.pricePerHour) * 100),
-          spaceCount: parseInt(formData.spaceCount.toString(), 10)
-        })
+          title: formData.title.trim(),
+          description: formData.description.trim(),
+          address: formData.address.trim(),
+          latitude: formData.latitude,
+          longitude: formData.longitude,
+          pricePerHour: Math.round(
+            Number.parseFloat(formData.pricePerHour) * 100,
+          ),
+          spaceCount: Number.parseInt(formData.spaceCount.toString(), 10),
+          availableDays: formData.availableDays,
+          availableFrom: formData.availableFrom,
+          availableUntil: formData.availableUntil,
+        }),
       });
 
       if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.message || 'Failed to update spot');
+        const data = (await response.json()) as { message?: string };
+        throw new Error(data.message ?? 'Failed to update spot');
       }
 
       router.push(`/spots/${id}`);
@@ -121,123 +215,289 @@ export default function EditSpotPage() {
   };
 
   const handleDelete = async () => {
-    if (!confirm('Are you sure you want to delete this listing? This action cannot be undone.')) return;
-    
+    const confirmed = window.confirm(
+      'Delete this listing? This cannot be undone.',
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
     const token = localStorage.getItem('parkshare_access_token');
+    if (!token) {
+      setError('Please log in to delete your listing.');
+      return;
+    }
+
     try {
       const response = await fetch(`${apiBaseUrl}/api/v1/spots/${id}`, {
         method: 'DELETE',
-        headers: { 'Authorization': `Bearer ${token}` }
+        headers: { Authorization: `Bearer ${token}` },
       });
-      if (!response.ok) throw new Error('Failed to delete spot');
+
+      if (!response.ok) {
+        throw new Error('Failed to delete spot');
+      }
+
       router.push('/');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to delete spot');
     }
   };
 
-  if (loading) return (
-    <div className="min-h-screen flex items-center justify-center bg-slate-50">
-      <Loader2 className="animate-spin text-slate-400" size={40} />
-    </div>
-  );
+  if (loading) {
+    return (
+      <main className="flex min-h-screen items-center justify-center bg-slate-50">
+        <Loader2 className="animate-spin text-slate-400" size={40} />
+      </main>
+    );
+  }
 
   return (
-    <main className="create-spot-shell">
-      <form onSubmit={handleSubmit} className="listing-workspace">
-        <header className="listing-topbar">
-          <Link href={`/spots/${id}`} className="create-spot-back">
-            <ArrowLeft size={18} />
-            Back
-          </Link>
-          <h1>Edit Listing</h1>
-          <div className="flex gap-4">
-            <button type="button" onClick={handleDelete} className="text-rose-500 hover:bg-rose-50 p-2 rounded-xl transition-colors">
-              <Trash2 size={22} />
+    <main className="min-h-screen bg-slate-50 px-4 py-6 text-slate-950 sm:px-6 lg:px-8">
+      <form onSubmit={handleSubmit} className="mx-auto flex max-w-7xl flex-col gap-6">
+        <header className="flex flex-col gap-4 rounded-3xl bg-white p-5 shadow-sm sm:flex-row sm:items-center sm:justify-between sm:p-6">
+          <div className="flex items-center gap-4">
+            <Link
+              href={`/spots/${id}`}
+              className="inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-100 text-slate-800 transition hover:bg-slate-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2"
+              aria-label="Back to spot details"
+            >
+              <ArrowLeft size={20} aria-hidden="true" />
+            </Link>
+            <div>
+              <p className="text-sm font-semibold text-slate-500">Host tools</p>
+              <h1 className="text-3xl font-bold tracking-tight">Edit listing</h1>
+            </div>
+          </div>
+
+          <div className="flex flex-col gap-3 sm:flex-row">
+            <button
+              type="button"
+              onClick={handleDelete}
+              className="inline-flex items-center justify-center gap-2 rounded-2xl bg-rose-50 px-5 py-3 font-semibold text-rose-600 transition hover:bg-rose-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-500 focus-visible:ring-offset-2"
+            >
+              <Trash2 size={18} aria-hidden="true" />
+              Delete
             </button>
-            <button type="submit" className="submit-btn" disabled={saving}>
-              {saving ? 'Saving...' : 'Save Changes'}
-              {!saving && <Save size={18} className="ml-2" />}
+            <button
+              type="submit"
+              disabled={saving}
+              className="inline-flex items-center justify-center gap-2 rounded-2xl bg-gradient-to-br from-emerald-400 to-teal-500 px-6 py-3 font-semibold text-white shadow-sm transition hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2 disabled:bg-slate-200 disabled:opacity-70"
+            >
+              {saving ? <Loader2 className="animate-spin" size={18} /> : <Save size={18} />}
+              {saving ? 'Saving' : 'Save changes'}
             </button>
           </div>
         </header>
 
-        {error && (
-          <div className="listing-alert listing-alert-error flex items-center gap-2">
-            <AlertCircle size={18} />
+        {error ? (
+          <section className="flex items-center gap-3 rounded-2xl bg-rose-50 p-4 font-semibold text-rose-700">
+            <AlertCircle size={20} aria-hidden="true" />
             {error}
+          </section>
+        ) : null}
+
+        <section className="grid gap-6 lg:grid-cols-[minmax(0,1.25fr)_minmax(340px,0.75fr)]">
+          <div className="flex flex-col gap-6 rounded-3xl bg-white p-5 shadow-sm sm:p-8">
+            <div className="grid gap-5 md:grid-cols-2">
+              <label className="flex flex-col gap-2 md:col-span-2">
+                <span className="text-sm font-semibold text-slate-500">Listing name</span>
+                <input
+                  name="title"
+                  value={formData.title}
+                  onChange={handleInputChange}
+                  required
+                  className="rounded-2xl bg-slate-100 px-4 py-4 text-lg font-semibold outline-none transition focus:ring-2 focus:ring-emerald-500"
+                  placeholder="Covered garage near the center"
+                />
+              </label>
+
+              <label className="flex flex-col gap-2 md:col-span-2">
+                <span className="text-sm font-semibold text-slate-500">Description</span>
+                <textarea
+                  name="description"
+                  value={formData.description}
+                  onChange={handleInputChange}
+                  rows={5}
+                  className="min-h-36 resize-none rounded-2xl bg-slate-100 px-4 py-4 leading-relaxed outline-none transition focus:ring-2 focus:ring-emerald-500"
+                  placeholder="Mention entrance details, gate access, lighting, roof cover, and anything drivers should know."
+                />
+              </label>
+
+              <label className="flex flex-col gap-2">
+                <span className="text-sm font-semibold text-slate-500">Hourly price</span>
+                <span className="flex items-center gap-3 rounded-2xl bg-slate-100 px-4 py-4 focus-within:ring-2 focus-within:ring-emerald-500">
+                  <Euro size={20} className="text-emerald-700" aria-hidden="true" />
+                  <input
+                    name="pricePerHour"
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={formData.pricePerHour}
+                    onChange={handleInputChange}
+                    required
+                    className="w-full bg-transparent text-lg font-bold outline-none"
+                  />
+                </span>
+              </label>
+
+              <label className="flex flex-col gap-2">
+                <span className="text-sm font-semibold text-slate-500">Available spaces</span>
+                <span className="flex items-center gap-3 rounded-2xl bg-slate-100 px-4 py-4 focus-within:ring-2 focus-within:ring-emerald-500">
+                  <Warehouse size={20} className="text-emerald-700" aria-hidden="true" />
+                  <input
+                    name="spaceCount"
+                    type="number"
+                    min="1"
+                    max="200"
+                    value={formData.spaceCount}
+                    onChange={handleInputChange}
+                    required
+                    className="w-full bg-transparent text-lg font-bold outline-none"
+                  />
+                </span>
+              </label>
+
+              <label className="flex flex-col gap-2 md:col-span-2">
+                <span className="text-sm font-semibold text-slate-500">Address</span>
+                <span className="flex items-center gap-3 rounded-2xl bg-slate-100 px-4 py-4 focus-within:ring-2 focus-within:ring-emerald-500">
+                  <MapPin size={20} className="text-emerald-700" aria-hidden="true" />
+                  <input
+                    name="address"
+                    value={formData.address}
+                    onChange={handleInputChange}
+                    required
+                    className="w-full bg-transparent font-semibold outline-none"
+                  />
+                </span>
+              </label>
+            </div>
+
+            <section className="rounded-3xl bg-slate-100 p-5 sm:p-6">
+              <div className="mb-5 flex items-center gap-3">
+                <span className="inline-flex h-11 w-11 items-center justify-center rounded-2xl bg-white text-emerald-700">
+                  <CalendarDays size={21} aria-hidden="true" />
+                </span>
+                <div>
+                  <h2 className="text-xl font-bold">Availability</h2>
+                  <p className="text-sm font-semibold text-slate-500">
+                    Choose when drivers can reserve this garage.
+                  </p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-7">
+                {weekDays.map((day) => {
+                  const selected = formData.availableDays.includes(day.value);
+
+                  return (
+                    <button
+                      key={day.value}
+                      type="button"
+                      onClick={() => toggleDay(day.value)}
+                      className={`rounded-2xl px-4 py-4 text-left font-bold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2 ${
+                        selected
+                          ? 'bg-emerald-700 text-white shadow-lg shadow-emerald-100'
+                          : 'bg-white text-slate-900 hover:bg-emerald-50'
+                      }`}
+                      aria-pressed={selected}
+                    >
+                      {day.label}
+                    </button>
+                  );
+                })}
+              </div>
+
+              <div className="mt-5 grid gap-4 md:grid-cols-2">
+                <label className="flex flex-col gap-2">
+                  <span className="text-sm font-semibold text-slate-500">From</span>
+                  <span className="flex items-center gap-3 rounded-2xl bg-white px-4 py-4 focus-within:ring-2 focus-within:ring-emerald-500">
+                    <Clock3 size={20} className="text-slate-700" aria-hidden="true" />
+                    <input
+                      name="availableFrom"
+                      type="time"
+                      value={formData.availableFrom}
+                      onChange={handleInputChange}
+                      required
+                      className="w-full bg-transparent text-lg font-bold outline-none"
+                    />
+                  </span>
+                </label>
+                <label className="flex flex-col gap-2">
+                  <span className="text-sm font-semibold text-slate-500">Until</span>
+                  <span className="flex items-center gap-3 rounded-2xl bg-white px-4 py-4 focus-within:ring-2 focus-within:ring-emerald-500">
+                    <Clock3 size={20} className="text-slate-700" aria-hidden="true" />
+                    <input
+                      name="availableUntil"
+                      type="time"
+                      value={formData.availableUntil}
+                      onChange={handleInputChange}
+                      required
+                      className="w-full bg-transparent text-lg font-bold outline-none"
+                    />
+                  </span>
+                </label>
+              </div>
+            </section>
           </div>
-        )}
 
-        <aside className="listing-drawer py-8">
-          <section className="form-section">
-            <h2>Spot Details</h2>
-            <label className="form-group">
-              <span>Title</span>
-              <input name="title" value={formData.title} onChange={handleInputChange} required />
-            </label>
-            <label className="form-group">
-              <span>Description</span>
-              <textarea name="description" value={formData.description} onChange={handleInputChange} rows={4} />
-            </label>
-            <label className="form-group">
-              <span>EUR / hour</span>
-              <input name="pricePerHour" type="number" step="0.01" value={formData.pricePerHour} onChange={handleInputChange} required />
-            </label>
-          </section>
+          <aside className="flex flex-col gap-6">
+            <section className="rounded-3xl bg-white p-6 shadow-sm">
+              <p className="text-sm font-semibold text-slate-500">Preview</p>
+              <h2 className="mt-2 text-2xl font-bold tracking-tight">
+                {formData.title || 'Untitled listing'}
+              </h2>
+              <p className="mt-3 line-clamp-4 text-slate-500">
+                {formData.description ||
+                  'Add a short description so drivers know what to expect.'}
+              </p>
 
-          <section className="form-section">
-            <h2>Availability</h2>
-            <label className="form-group">
-              <span>Spaces</span>
-              <input name="spaceCount" type="number" value={formData.spaceCount} onChange={handleInputChange} min="1" required />
-            </label>
-            <div className="form-group">
-              <span>Days</span>
-              <div className="day-chip-grid">
-                {weekDays.map(day => (
-                  <button
-                    key={day.value}
-                    type="button"
-                    className={`day-chip ${formData.availableDays.includes(day.value) ? 'day-chip-selected' : ''}`}
-                    onClick={() => toggleDay(day.value)}
-                  >
-                    {day.label}
-                  </button>
-                ))}
+              <div className="mt-6 grid gap-3">
+                <div className="rounded-2xl bg-slate-100 p-4">
+                  <span className="text-sm font-semibold text-slate-500">Price</span>
+                  <p className="mt-1 text-xl font-bold text-emerald-700">
+                    {pricePreview}
+                  </p>
+                </div>
+                <div className="rounded-2xl bg-slate-100 p-4">
+                  <span className="text-sm font-semibold text-slate-500">Schedule</span>
+                  <p className="mt-1 font-bold">
+                    {formatSelectedDays(formData.availableDays)}
+                  </p>
+                  <p className="mt-1 text-sm font-semibold text-slate-500">
+                    {formData.availableFrom} - {formData.availableUntil}
+                  </p>
+                </div>
               </div>
-            </div>
-            <div className="time-grid">
-              <label className="form-group">
-                <span>From</span>
-                <input name="availableFrom" type="time" value={formData.availableFrom} onChange={handleInputChange} required />
-              </label>
-              <label className="form-group">
-                <span>Until</span>
-                <input name="availableUntil" type="time" value={formData.availableUntil} onChange={handleInputChange} required />
-              </label>
-            </div>
-          </section>
+            </section>
 
-          <section className="form-section">
-            <h2>Entrance</h2>
-            <label className="form-group">
-              <span>Address</span>
-              <input name="address" value={formData.address} onChange={handleInputChange} required />
-            </label>
-            <div className="coordinate-grid">
-              <div className="form-group">
-                <span>Lat</span>
-                <div className="bg-slate-100 p-3 rounded-xl text-slate-500 text-sm font-mono">{formData.latitude}</div>
+            <section className="rounded-3xl bg-white p-6 shadow-sm">
+              <div className="flex items-center gap-3">
+                <span className="inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-700">
+                  <ShieldCheck size={22} aria-hidden="true" />
+                </span>
+                <div>
+                  <h2 className="text-xl font-bold">Verification</h2>
+                  <p className="text-sm font-semibold text-slate-500">
+                    Admins may review important listing changes.
+                  </p>
+                </div>
               </div>
-              <div className="form-group">
-                <span>Lng</span>
-                <div className="bg-slate-100 p-3 rounded-xl text-slate-500 text-sm font-mono">{formData.longitude}</div>
+
+              <div className="mt-5 rounded-2xl bg-slate-100 p-4">
+                <p className="text-sm font-semibold text-slate-500">Pinned entrance</p>
+                <p className="mt-1 font-mono text-sm font-bold">
+                  {formData.latitude.toFixed(5)}, {formData.longitude.toFixed(5)}
+                </p>
+                <p className="mt-2 text-sm text-slate-500">
+                  Coordinates stay locked here so the verified entrance cannot
+                  drift during normal edits.
+                </p>
               </div>
-            </div>
-            <p className="text-[10px] text-slate-400 mt-2 px-2 italic text-center">Location coordinates cannot be changed after creation for security reasons.</p>
-          </section>
-        </aside>
+            </section>
+          </aside>
+        </section>
       </form>
     </main>
   );
