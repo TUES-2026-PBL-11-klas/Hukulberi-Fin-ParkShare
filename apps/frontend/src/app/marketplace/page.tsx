@@ -1,9 +1,9 @@
 'use client';
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
-import { Search, SlidersHorizontal, MapPin, Star, Clock, Euro, Loader2 } from 'lucide-react';
+import { Search, SlidersHorizontal, MapPin, Star, Loader2 } from 'lucide-react';
 
 const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:3001";
 

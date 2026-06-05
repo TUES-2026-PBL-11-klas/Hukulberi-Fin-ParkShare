@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import Link from 'next/link';
-import { ArrowLeft, Save, Trash2, MapPin, Loader2, AlertCircle } from 'lucide-react';
+import { ArrowLeft, Save, Trash2, Loader2, AlertCircle } from 'lucide-react';
 import '../create/create-spot.css';
 
 const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:3001";
@@ -21,7 +21,6 @@ const weekDays = [
 export default function EditSpotPage() {
   const router = useRouter();
   const { id } = useParams();
-  const mapRef = useRef<HTMLDivElement | null>(null);
   
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -59,8 +58,8 @@ export default function EditSpotPage() {
           availableFrom: data.availableFrom || '08:00',
           availableUntil: data.availableUntil || '20:00',
         });
-      } catch (err: any) {
-        setError(err.message);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Failed to fetch spot details');
       } finally {
         setLoading(false);
       }
@@ -114,8 +113,8 @@ export default function EditSpotPage() {
       }
 
       router.push(`/spots/${id}`);
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to update spot');
     } finally {
       setSaving(false);
     }
@@ -132,8 +131,8 @@ export default function EditSpotPage() {
       });
       if (!response.ok) throw new Error('Failed to delete spot');
       router.push('/');
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to delete spot');
     }
   };
 

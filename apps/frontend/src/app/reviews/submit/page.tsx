@@ -32,14 +32,10 @@ export default function SubmitReviewPage() {
   const [rating, setRating] = useState<ReviewRating>(ReviewRating.FIVE);
   const [comment, setComment] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(
+    !bookingId || !spotId ? 'Missing booking or spot information.' : null
+  );
   const [success, setSuccess] = useState(false);
-
-  useEffect(() => {
-    if (!bookingId || !spotId) {
-      setError('Missing booking or spot information.');
-    }
-  }, [bookingId, spotId]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -77,8 +73,8 @@ export default function SubmitReviewPage() {
       setTimeout(() => {
         router.push(`/spots/${spotId}`);
       }, 2000);
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to submit review');
     } finally {
       setIsSubmitting(false);
     }
@@ -126,7 +122,6 @@ export default function SubmitReviewPage() {
               <label className="block text-sm font-bold text-slate-700 uppercase tracking-wider">Rating</label>
               <div className="flex gap-3">
                 {Object.values(ReviewRating).map((r, i) => {
-                  const ratingNum = i + 1;
                   const isSelected = Object.values(ReviewRating).indexOf(rating) >= i;
                   return (
                     <button
