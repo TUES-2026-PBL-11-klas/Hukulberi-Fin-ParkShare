@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, Suspense } from 'react';
+import React, { Suspense, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { Star, ArrowLeft, Send, CheckCircle2, Loader2 } from 'lucide-react';
@@ -23,7 +23,7 @@ const ratingLabels = {
   FIVE: 'Excellent'
 };
 
-function SubmitReviewForm() {
+function SubmitReviewPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const bookingId = searchParams.get('bookingId');
@@ -181,12 +181,16 @@ function SubmitReviewForm() {
 
 export default function SubmitReviewPage() {
   return (
-    <Suspense fallback={
-      <div className="min-h-screen flex items-center justify-center bg-slate-50">
-        <Loader2 className="animate-spin text-slate-400" size={40} />
-      </div>
-    }>
-      <SubmitReviewForm />
+    <Suspense
+      fallback={
+        <div className="min-h-screen bg-slate-50 flex items-center justify-center p-6">
+          <div className="max-w-md w-full bg-white rounded-3xl p-8 text-center shadow-xl shadow-slate-200/60">
+            <p className="text-slate-500 font-medium">Loading review form...</p>
+          </div>
+        </div>
+      }
+    >
+      <SubmitReviewPageContent />
     </Suspense>
   );
 }
