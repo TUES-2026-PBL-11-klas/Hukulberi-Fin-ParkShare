@@ -87,6 +87,8 @@ describe('SpotsService', () => {
     });
 
     it('should reject an invalid availability window', async () => {
+      const createSpot = jest.spyOn(prisma.spot, 'create');
+
       await expect(
         service.createSpot('user-1', {
           title: 'Test Spot',
@@ -100,7 +102,7 @@ describe('SpotsService', () => {
           availableUntil: '08:00',
         }),
       ).rejects.toThrow('Available from time must be earlier');
-      expect(prisma.spot.create).not.toHaveBeenCalled();
+      expect(createSpot).not.toHaveBeenCalled();
     });
   });
 
@@ -221,13 +223,14 @@ describe('SpotsService', () => {
       };
 
       jest.spyOn(prisma.spot, 'findUnique').mockResolvedValue(existingSpot);
+      const updateSpot = jest.spyOn(prisma.spot, 'update');
 
       await expect(
         service.updateSpot('1', 'user-1', {
           availableFrom: '19:00',
         }),
       ).rejects.toThrow('Available from time must be earlier');
-      expect(prisma.spot.update).not.toHaveBeenCalled();
+      expect(updateSpot).not.toHaveBeenCalled();
     });
   });
 });
