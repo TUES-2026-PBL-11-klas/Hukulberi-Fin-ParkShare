@@ -3,7 +3,7 @@ import {
   ForbiddenException,
   NotFoundException,
 } from '@nestjs/common';
-import { BookingStatus, Prisma } from '@prisma/client';
+import { BookingStatus, Prisma, SpotVerificationStatus } from '@prisma/client';
 import { BookingsService } from './bookings.service';
 import { PrismaService } from '../prisma/prisma.service';
 
@@ -22,6 +22,28 @@ const baseBooking = {
   updatedAt: new Date('2026-05-25T09:50:00.000Z'),
 };
 
+const baseSpot = {
+  id: baseBooking.spotId,
+  hostUserId: '33333333-3333-3333-3333-333333333333',
+  title: baseBooking.spotLabel,
+  description: null,
+  address: 'Address X, Sofia',
+  latitude: 42.6977,
+  longitude: 23.3219,
+  pricePerHour: 1200,
+  spaceCount: 1,
+  availableDays: ['MON', 'TUE', 'WED', 'THU', 'FRI'],
+  availableFrom: '08:00',
+  availableUntil: '20:00',
+  photoUrls: [],
+  verificationStatus: SpotVerificationStatus.VERIFIED,
+  verificationNote: null,
+  verifiedAt: new Date('2026-05-01T10:00:00.000Z'),
+  isActive: true,
+  createdAt: new Date('2026-05-01T10:00:00.000Z'),
+  updatedAt: new Date('2026-05-01T10:00:00.000Z'),
+};
+
 describe('BookingsService', () => {
   let service: BookingsService;
   let prisma: {
@@ -32,6 +54,9 @@ describe('BookingsService', () => {
       findUnique: jest.Mock;
       update: jest.Mock;
       updateMany: jest.Mock;
+    };
+    spot: {
+      findUnique: jest.Mock;
     };
   };
 
@@ -45,7 +70,11 @@ describe('BookingsService', () => {
         update: jest.fn(),
         updateMany: jest.fn(),
       },
+      spot: {
+        findUnique: jest.fn(),
+      },
     };
+    prisma.spot.findUnique.mockResolvedValue(baseSpot);
 
     service = new BookingsService(prisma as unknown as PrismaService);
   });
@@ -112,6 +141,8 @@ describe('BookingsService', () => {
       startAt: baseBooking.startAt.toISOString(),
     });
 
+    await Promise.resolve();
+
     expect(prisma.booking.updateMany).toHaveBeenCalledTimes(1);
 
     resolveExpiry();
@@ -132,6 +163,51 @@ describe('BookingsService', () => {
         startAt: baseBooking.startAt.toISOString(),
       }),
     ).rejects.toBeInstanceOf(ConflictException);
+
+    expect(prisma.booking.create).not.toHaveBeenCalled();
+  });
+
+  it('rejects a hold on a day outside the spot availability', async () => {
+    await expect(
+      service.createHold({
+        amount: 1200,
+        driverUserId: baseBooking.driverUserId,
+        endAt: '2026-05-30T11:00:00.000Z',
+        spotLabel: baseBooking.spotLabel,
+        spotId: baseBooking.spotId,
+        startAt: '2026-05-30T10:00:00.000Z',
+      }),
+    ).rejects.toThrow('Spot is not available on the selected day');
+
+    expect(prisma.booking.create).not.toHaveBeenCalled();
+  });
+
+  it('rejects a hold outside the spot availability hours', async () => {
+    await expect(
+      service.createHold({
+        amount: 1200,
+        driverUserId: baseBooking.driverUserId,
+        endAt: '2026-05-25T04:00:00.000Z',
+        spotLabel: baseBooking.spotLabel,
+        spotId: baseBooking.spotId,
+        startAt: '2026-05-25T03:00:00.000Z',
+      }),
+    ).rejects.toThrow('Spot is not available during the selected hours');
+
+    expect(prisma.booking.create).not.toHaveBeenCalled();
+  });
+
+  it('rejects a client supplied amount that does not match the spot price', async () => {
+    await expect(
+      service.createHold({
+        amount: 100,
+        driverUserId: baseBooking.driverUserId,
+        endAt: baseBooking.endAt.toISOString(),
+        spotLabel: baseBooking.spotLabel,
+        spotId: baseBooking.spotId,
+        startAt: baseBooking.startAt.toISOString(),
+      }),
+    ).rejects.toThrow('Booking amount does not match');
 
     expect(prisma.booking.create).not.toHaveBeenCalled();
   });

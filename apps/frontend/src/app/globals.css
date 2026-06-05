@@ -287,41 +287,61 @@ body {
 }
 
 .parkshare-map-marker {
+  position: relative;
   display: grid;
   place-items: center;
-  border-radius: 9999px;
-  background: linear-gradient(135deg, #34d399, #14b8a6);
-  color: #ffffff;
-  box-shadow: 0 14px 28px rgb(15 23 42 / 0.25);
+  background: transparent;
 }
 
 .parkshare-map-marker span {
-  display: inline-flex;
-  min-width: 3.25rem;
-  height: 2.25rem;
-  align-items: center;
-  justify-content: center;
+  position: relative;
+  display: block;
+  width: 1.75rem;
+  height: 1.75rem;
+  border: 0.24rem solid #ffffff;
+  border-radius: 9999px 9999px 9999px 0.28rem;
+  background: linear-gradient(135deg, #34d399, #14b8a6);
+  box-shadow: 0 12px 24px rgb(15 23 42 / 0.28);
+  transform: rotate(-45deg);
+}
+
+.parkshare-map-marker span::after {
+  position: absolute;
+  inset: 0.4rem;
+  content: "";
   border-radius: 9999px;
-  color: #ffffff;
-  font-size: 0.875rem;
-  font-weight: 900;
+  background: #ffffff;
 }
 
 .leaflet-popup-content {
   display: grid;
-  gap: 0.35rem;
-  min-width: 11rem;
-  margin: 0.85rem 1rem;
+  gap: 0.3rem;
+  width: max-content !important;
+  min-width: 10.75rem;
+  max-width: 13.25rem;
+  margin: 0.72rem 0.8rem;
   color: #0f172a;
 }
 
+.leaflet-popup-content-wrapper {
+  border-radius: 0.75rem;
+}
+
+.leaflet-popup-close-button {
+  top: 0.35rem !important;
+  right: 0.35rem !important;
+}
+
 .leaflet-popup-content strong {
-  font-size: 0.95rem;
+  display: block;
+  max-width: 11.6rem;
+  font-size: 0.88rem;
+  line-height: 1.25;
 }
 
 .leaflet-popup-content span {
   color: #64748b;
-  font-size: 0.82rem;
+  font-size: 0.78rem;
   line-height: 1.35;
 }
 
@@ -334,25 +354,25 @@ body {
 
 .garage-popup {
   display: grid;
-  gap: 0.45rem;
+  gap: 0.32rem;
 }
 
 .garage-popup em {
   color: #006c49;
-  font-size: 0.82rem;
+  font-size: 0.8rem;
   font-style: normal;
   font-weight: 900;
 }
 
 .garage-popup div {
-  display: flex;
-  gap: 0.45rem;
-  padding-top: 0.25rem;
+  display: block;
+  padding-top: 0.18rem;
 }
 
 .garage-popup a {
   display: inline-flex;
-  min-height: 2rem;
+  width: 8.25rem;
+  min-height: 2.05rem;
   align-items: center;
   justify-content: center;
   border: 0;
@@ -361,13 +381,8 @@ body {
   color: #ffffff;
   font-size: 0.76rem;
   font-weight: 850;
-  padding: 0 0.7rem;
+  padding: 0 0.72rem;
   text-decoration: none;
-}
-
-.garage-popup a + a {
-  background: #ecfdf5;
-  color: #006c49;
 }
 
 .map-profile-button {
