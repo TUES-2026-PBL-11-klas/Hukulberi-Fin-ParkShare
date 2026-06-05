@@ -49,18 +49,144 @@ data:
       "schemaVersion": 39,
       "version": 1,
       "refresh": "10s",
+      "time": {
+        "from": "now-1h",
+        "to": "now"
+      },
       "panels": [
         {
           "type": "stat",
           "title": "Backend Up",
+          "description": "Backend metrics endpoint health from Prometheus scrape status.",
           "gridPos": { "h": 4, "w": 6, "x": 0, "y": 0 },
+          "fieldConfig": {
+            "defaults": {
+              "mappings": [
+                { "type": "value", "options": { "0": { "text": "DOWN", "color": "red" }, "1": { "text": "UP", "color": "green" } } }
+              ],
+              "thresholds": { "mode": "absolute", "steps": [{ "color": "red", "value": null }, { "color": "green", "value": 1 }] }
+            },
+            "overrides": []
+          },
           "targets": [{ "expr": "up{job=\"parkshare-backend\"}", "refId": "A" }]
         },
         {
           "type": "stat",
           "title": "Frontend Up",
+          "description": "Frontend metrics endpoint health from Prometheus scrape status.",
           "gridPos": { "h": 4, "w": 6, "x": 6, "y": 0 },
+          "fieldConfig": {
+            "defaults": {
+              "mappings": [
+                { "type": "value", "options": { "0": { "text": "DOWN", "color": "red" }, "1": { "text": "UP", "color": "green" } } }
+              ],
+              "thresholds": { "mode": "absolute", "steps": [{ "color": "red", "value": null }, { "color": "green", "value": 1 }] }
+            },
+            "overrides": []
+          },
           "targets": [{ "expr": "up{job=\"parkshare-frontend\"}", "refId": "A" }]
+        },
+        {
+          "type": "stat",
+          "title": "Active Spots",
+          "description": "Current active parking spots reported by the backend.",
+          "gridPos": { "h": 4, "w": 6, "x": 12, "y": 0 },
+          "targets": [{ "expr": "parkshare_marketplace_spots_active_total or vector(0)", "refId": "A" }]
+        },
+        {
+          "type": "stat",
+          "title": "HTTP Errors / 5m",
+          "description": "Backend HTTP errors observed in the last five minutes.",
+          "gridPos": { "h": 4, "w": 6, "x": 18, "y": 0 },
+          "fieldConfig": {
+            "defaults": {
+              "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "yellow", "value": 1 }, { "color": "red", "value": 5 }] }
+            },
+            "overrides": []
+          },
+          "targets": [{ "expr": "sum(increase(parkshare_http_request_errors_total[5m])) or vector(0)", "refId": "A" }]
+        },
+        {
+          "type": "timeseries",
+          "title": "Backend Request Rate",
+          "description": "Requests per second grouped by route and status.",
+          "gridPos": { "h": 8, "w": 12, "x": 0, "y": 4 },
+          "fieldConfig": {
+            "defaults": { "unit": "reqps" },
+            "overrides": []
+          },
+          "targets": [{ "expr": "sum by (route, status) (rate(parkshare_http_requests_total[5m]))", "legendFormat": "{{route}} {{status}}", "refId": "A" }]
+        },
+        {
+          "type": "timeseries",
+          "title": "Backend p95 Latency",
+          "description": "95th percentile backend request duration by route.",
+          "gridPos": { "h": 8, "w": 12, "x": 12, "y": 4 },
+          "fieldConfig": {
+            "defaults": { "unit": "s" },
+            "overrides": []
+          },
+          "targets": [{ "expr": "histogram_quantile(0.95, sum by (le, route) (rate(parkshare_http_request_duration_seconds_bucket[5m])))", "legendFormat": "{{route}}", "refId": "A" }]
+        },
+        {
+          "type": "timeseries",
+          "title": "Frontend Page Views",
+          "description": "Frontend page views per second by page.",
+          "gridPos": { "h": 8, "w": 12, "x": 0, "y": 12 },
+          "fieldConfig": {
+            "defaults": { "unit": "reqps" },
+            "overrides": []
+          },
+          "targets": [{ "expr": "sum by (page) (rate(parkshare_frontend_page_views_total[5m]))", "legendFormat": "{{page}}", "refId": "A" }]
+        },
+        {
+          "type": "timeseries",
+          "title": "Frontend Interactions",
+          "description": "Tracked frontend interactions per second by event.",
+          "gridPos": { "h": 8, "w": 12, "x": 12, "y": 12 },
+          "fieldConfig": {
+            "defaults": { "unit": "reqps" },
+            "overrides": []
+          },
+          "targets": [{ "expr": "sum by (event) (rate(parkshare_frontend_interactions_total[5m]))", "legendFormat": "{{event}}", "refId": "A" }]
+        },
+        {
+          "type": "stat",
+          "title": "Bookings / 1h",
+          "description": "Bookings created in the last hour.",
+          "gridPos": { "h": 4, "w": 6, "x": 0, "y": 20 },
+          "targets": [{ "expr": "sum(increase(parkshare_bookings_created_total[1h])) or vector(0)", "refId": "A" }]
+        },
+        {
+          "type": "stat",
+          "title": "Checkout Failures / 1h",
+          "description": "Stripe checkout creation failures in the last hour.",
+          "gridPos": { "h": 4, "w": 6, "x": 6, "y": 20 },
+          "fieldConfig": {
+            "defaults": {
+              "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "red", "value": 1 }] }
+            },
+            "overrides": []
+          },
+          "targets": [{ "expr": "sum(increase(parkshare_payments_checkout_failed_total[1h])) or vector(0)", "refId": "A" }]
+        },
+        {
+          "type": "stat",
+          "title": "Reviews / 1h",
+          "description": "Marketplace reviews created in the last hour.",
+          "gridPos": { "h": 4, "w": 6, "x": 12, "y": 20 },
+          "targets": [{ "expr": "sum(increase(parkshare_marketplace_reviews_created_total[1h])) or vector(0)", "refId": "A" }]
+        },
+        {
+          "type": "stat",
+          "title": "Search p95",
+          "description": "95th percentile marketplace search duration.",
+          "gridPos": { "h": 4, "w": 6, "x": 18, "y": 20 },
+          "fieldConfig": {
+            "defaults": { "unit": "s" },
+            "overrides": []
+          },
+          "targets": [{ "expr": "histogram_quantile(0.95, sum by (le) (rate(parkshare_marketplace_spots_search_duration_seconds_bucket[5m]))) or vector(0)", "refId": "A" }]
         }
       ]
     }
