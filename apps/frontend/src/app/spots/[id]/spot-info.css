@@ -255,12 +255,21 @@
   font-weight: 950;
 }
 
+.spot-booking-warning,
 .spot-booking-error {
   border-radius: 0.85rem;
-  background: #fff1f2;
-  color: #be123c;
   padding: 0.85rem 1rem;
   font-weight: 750;
+}
+
+.spot-booking-warning {
+  background: #fffbeb;
+  color: #92400e;
+}
+
+.spot-booking-error {
+  background: #fff1f2;
+  color: #be123c;
 }
 
 .spot-booking-panel button {

@@ -42,6 +42,7 @@ type ApiErrorResponse = {
 };
 
 type ReviewRatingValue = NonNullable<SpotDetails["reviews"]>[number]["rating"];
+const weekdayKeys = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"];
 
 function readErrorMessage(payload: unknown): string {
   if (typeof payload === "object" && payload !== null && "message" in payload) {
@@ -100,6 +101,97 @@ function getDefaultReservationTimes() {
     startAt: toDateTimeInputValue(roundedStart),
     endAt: toDateTimeInputValue(roundedEnd),
   };
+}
+
+function getReservationValidationMessage(
+  spot: SpotDetails | null,
+  startAt: string,
+  endAt: string,
+): string {
+  if (!spot || !startAt || !endAt) {
+    return "";
+  }
+
+  const startDate = new Date(startAt);
+  const endDate = new Date(endAt);
+
+  if (Number.isNaN(startDate.getTime()) || Number.isNaN(endDate.getTime())) {
+    return "Choose valid check-in and check-out times.";
+  }
+
+  if (startDate >= endDate) {
+    return "Check-out must be after check-in.";
+  }
+
+  if (startDate < new Date()) {
+    return "Choose a check-in time in the future.";
+  }
+
+  if (startDate.toDateString() !== endDate.toDateString()) {
+    return "Choose a reservation within one available day.";
+  }
+
+  const selectedDay = weekdayKeys[startDate.getDay()];
+  const availableDays = spot.availableDays ?? [];
+
+  if (availableDays.length > 0 && !availableDays.includes(selectedDay)) {
+    return `This spot is only available on ${formatAvailabilityDays(availableDays)}.`;
+  }
+
+  const startTime = startAt.slice(11, 16);
+  const endTime = endAt.slice(11, 16);
+  const availableFrom = spot.availableFrom ?? "08:00";
+  const availableUntil = spot.availableUntil ?? "20:00";
+
+  if (startTime < availableFrom || endTime > availableUntil) {
+    return `Choose a time between ${availableFrom} and ${availableUntil}.`;
+  }
+
+  return "";
+}
+
+function getNextAvailableReservationTimes(spot: SpotDetails): {
+  startAt: string;
+  endAt: string;
+} {
+  const availableDays = spot.availableDays?.length
+    ? spot.availableDays
+    : ["MON", "TUE", "WED", "THU", "FRI"];
+  const availableFrom = spot.availableFrom ?? "08:00";
+  const availableUntil = spot.availableUntil ?? "20:00";
+  const now = new Date();
+
+  for (let dayOffset = 0; dayOffset < 14; dayOffset += 1) {
+    const candidate = new Date(now);
+    candidate.setDate(now.getDate() + dayOffset);
+
+    if (!availableDays.includes(weekdayKeys[candidate.getDay()])) {
+      continue;
+    }
+
+    const [fromHour, fromMinute] = availableFrom.split(":").map(Number);
+    const [untilHour, untilMinute] = availableUntil.split(":").map(Number);
+    const start = new Date(candidate);
+    start.setHours(fromHour, fromMinute, 0, 0);
+
+    if (start <= now) {
+      start.setHours(now.getHours() + 1, 0, 0, 0);
+    }
+
+    const end = new Date(start);
+    end.setHours(start.getHours() + 1, start.getMinutes(), 0, 0);
+    const latestEnd = new Date(candidate);
+    latestEnd.setHours(untilHour, untilMinute, 0, 0);
+
+    if (start > now && end <= latestEnd) {
+      return {
+        startAt: toDateTimeInputValue(start),
+        endAt: toDateTimeInputValue(end),
+      };
+    }
+  }
+
+  return getDefaultReservationTimes();
 }
 
 function readPayloadMessage(payload: unknown, fallback: string): string {
@@ -187,16 +279,6 @@ export default function SpotInfoPage() {
   const [isCreatingBooking, setIsCreatingBooking] = useState(false);
 
   useEffect(() => {
-    const defaultTimer = window.setTimeout(() => {
-      const defaults = getDefaultReservationTimes();
-      setStartAt(defaults.startAt);
-      setEndAt(defaults.endAt);
-    }, 0);
-
-    return () => window.clearTimeout(defaultTimer);
-  }, []);
-
-  useEffect(() => {
     if (!spotId || mockGarages.some((garage) => garage.id === spotId)) {
       return;
     }
@@ -230,6 +312,20 @@ export default function SpotInfoPage() {
     void loadSpot();
   }, [spotId]);
 
+  useEffect(() => {
+    if (!spot) {
+      return;
+    }
+
+    const fillTimer = window.setTimeout(() => {
+      const defaults = getNextAvailableReservationTimes(spot);
+      setStartAt((current) => current || defaults.startAt);
+      setEndAt((current) => current || defaults.endAt);
+    }, 0);
+
+    return () => window.clearTimeout(fillTimer);
+  }, [spot]);
+
   const ratingLabel = useMemo(() => {
     if (!spot?.averageRating || !spot.reviewCount) {
       return "No reviews yet";
@@ -256,6 +352,14 @@ export default function SpotInfoPage() {
       hours,
     };
   }, [endAt, spot, startAt]);
+  const reservationValidationMessage = useMemo(
+    () => getReservationValidationMessage(spot, startAt, endAt),
+    [endAt, spot, startAt],
+  );
+  const canReserve =
+    !reservationValidationMessage &&
+    bookingSummary.amount > 0 &&
+    !isCreatingBooking;
 
   async function handleReserveNow() {
     setBookingError("");
@@ -279,18 +383,8 @@ export default function SpotInfoPage() {
     const startDate = new Date(startAt);
     const endDate = new Date(endAt);
 
-    if (!startAt || !endAt || startDate >= endDate) {
-      setBookingError("Choose a valid check-in and check-out time.");
-      return;
-    }
-
-    if (startDate < new Date()) {
-      setBookingError("Choose a check-in time in the future.");
-      return;
-    }
-
-    if (bookingSummary.amount <= 0) {
-      setBookingError("Reservation total must be greater than zero.");
+    if (reservationValidationMessage) {
+      setBookingError(reservationValidationMessage);
       return;
     }
 
@@ -494,11 +588,14 @@ export default function SpotInfoPage() {
               <span>{bookingSummary.hours > 0 ? `${bookingSummary.hours.toFixed(1)} hours` : "Choose times"}</span>
               <strong>{formatPrice(bookingSummary.amount)}</strong>
             </div>
+            {reservationValidationMessage ? (
+              <p className="spot-booking-warning">{reservationValidationMessage}</p>
+            ) : null}
             {bookingError ? <p className="spot-booking-error">{bookingError}</p> : null}
             <button
               type="button"
               onClick={handleReserveNow}
-              disabled={isCreatingBooking}
+              disabled={!canReserve}
             >
               {isCreatingBooking ? "Creating hold..." : "Reserve now"}
             </button>
