@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/unbound-method */
 import { Test, TestingModule } from '@nestjs/testing';
 import { SpotsService } from './spots.service';
 import { PrismaService } from '../prisma/prisma.service';
@@ -60,12 +59,14 @@ describe('SpotsService', () => {
         hostUser: { id: 'user-1', name: 'Test Host' },
       };
 
-      jest.spyOn(prisma.spot, 'create').mockResolvedValue(mockSpot);
+      const createSpot = jest
+        .spyOn(prisma.spot, 'create')
+        .mockResolvedValue(mockSpot);
 
       const result = await service.createSpot('user-1', spotData);
 
       expect(result).toEqual(mockSpot);
-      expect(prisma.spot.create).toHaveBeenCalledWith({
+      expect(createSpot).toHaveBeenCalledWith({
         data: {
           hostUserId: 'user-1',
           ...spotData,
@@ -86,6 +87,8 @@ describe('SpotsService', () => {
     });
 
     it('should reject an invalid availability window', async () => {
+      const createSpot = jest.spyOn(prisma.spot, 'create');
+
       await expect(
         service.createSpot('user-1', {
           title: 'Test Spot',
@@ -99,7 +102,7 @@ describe('SpotsService', () => {
           availableUntil: '08:00',
         }),
       ).rejects.toThrow('Available from time must be earlier');
-      expect(prisma.spot.create).not.toHaveBeenCalled();
+      expect(createSpot).not.toHaveBeenCalled();
     });
   });
 
@@ -135,7 +138,9 @@ describe('SpotsService', () => {
     });
 
     it('should coerce pagination query strings before passing them to Prisma', async () => {
-      jest.spyOn(prisma.spot, 'findMany').mockResolvedValue([]);
+      const findManySpots = jest
+        .spyOn(prisma.spot, 'findMany')
+        .mockResolvedValue([]);
       jest.spyOn(prisma.spot, 'count').mockResolvedValue(0);
 
       await service.searchSpots({
@@ -143,7 +148,7 @@ describe('SpotsService', () => {
         offset: '0' as unknown as number,
       });
 
-      expect(prisma.spot.findMany).toHaveBeenCalledWith(
+      expect(findManySpots).toHaveBeenCalledWith(
         expect.objectContaining({
           take: 100,
           skip: 0,
@@ -173,13 +178,15 @@ describe('SpotsService', () => {
         bookings: [],
       };
 
-      jest.spyOn(prisma.spot, 'findFirst').mockResolvedValue(mockSpot);
+      const findFirstSpot = jest
+        .spyOn(prisma.spot, 'findFirst')
+        .mockResolvedValue(mockSpot);
 
       const result = await service.getSpotById('1');
 
       expect(result).toBeDefined();
       expect(result.id).toBe('1');
-      expect(prisma.spot.findFirst).toHaveBeenCalledWith(
+      expect(findFirstSpot).toHaveBeenCalledWith(
         expect.objectContaining({
           where: {
             id: '1',
@@ -216,13 +223,14 @@ describe('SpotsService', () => {
       };
 
       jest.spyOn(prisma.spot, 'findUnique').mockResolvedValue(existingSpot);
+      const updateSpot = jest.spyOn(prisma.spot, 'update');
 
       await expect(
         service.updateSpot('1', 'user-1', {
           availableFrom: '19:00',
         }),
       ).rejects.toThrow('Available from time must be earlier');
-      expect(prisma.spot.update).not.toHaveBeenCalled();
+      expect(updateSpot).not.toHaveBeenCalled();
     });
   });
 });

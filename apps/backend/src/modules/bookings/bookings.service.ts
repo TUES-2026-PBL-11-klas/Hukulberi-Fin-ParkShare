@@ -18,6 +18,7 @@ import {
   BookingStatus,
   CreateBookingRequestDto,
 } from '@parkshare/contracts';
+import { MetricsService } from '../metrics/metrics.service';
 import { PrismaService } from '../prisma/prisma.service';
 
 const DEFAULT_CURRENCY = 'eur';
@@ -31,7 +32,10 @@ export class BookingsService implements OnModuleInit, OnModuleDestroy {
   private expiryTimer?: NodeJS.Timeout;
   private expiryRun?: Promise<void>;
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly metrics: MetricsService = new MetricsService(),
+  ) {}
 
   onModuleInit() {
     this.expiryTimer = setInterval(() => {
@@ -115,6 +119,8 @@ export class BookingsService implements OnModuleInit, OnModuleDestroy {
         },
       });
     } catch (error) {
+      this.metrics.recordBookingCreated(PrismaBookingStatus.HOLD);
+
       if (this.isActiveBookingOverlapError(error)) {
         throw new ConflictException(
           'Spot is already booked for the selected time range',
@@ -183,17 +189,23 @@ export class BookingsService implements OnModuleInit, OnModuleDestroy {
       data: { status: PrismaBookingStatus.CANCELED },
     });
 
+    this.metrics.recordBookingCanceled();
+
     return this.toBookingDto(updated);
   }
 
   private async expireOverdueHolds(): Promise<void> {
-    await this.prisma.booking.updateMany({
+    const expired = await this.prisma.booking.updateMany({
       where: {
         status: PrismaBookingStatus.HOLD,
         expiresAt: { lt: new Date() },
       },
       data: { status: PrismaBookingStatus.EXPIRED },
     });
+
+    if (expired?.count > 0) {
+      this.metrics.recordBookingExpired(expired.count);
+    }
   }
 
   private expireOverdueHoldsOnce(): Promise<void> {

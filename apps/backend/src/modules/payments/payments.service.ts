@@ -21,6 +21,7 @@ import {
   StripeWebhookEvent,
   StripeWebhookObject,
 } from './stripe-client.service';
+import { MetricsService } from '../metrics/metrics.service';
 import { PrismaService } from '../prisma/prisma.service';
 
 const DEFAULT_PAYMENT_NAME = 'ParkShare parking reservation';
@@ -34,6 +35,7 @@ export class PaymentsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly stripeClient: StripeClientService,
+    private readonly metrics: MetricsService = new MetricsService(),
   ) {}
 
   async createCheckoutSession(
@@ -60,6 +62,8 @@ export class PaymentsService {
       },
     });
 
+    this.metrics.recordPaymentCheckoutCreated();
+
     let session: Awaited<
       ReturnType<StripeClientService['createCheckoutSession']>
     >;
@@ -82,6 +86,7 @@ export class PaymentsService {
         where: { id: payment.id },
         data: { status: PaymentStatus.FAILED },
       });
+      this.metrics.recordPaymentCheckoutFailed();
       throw error;
     }
 
@@ -126,6 +131,7 @@ export class PaymentsService {
     });
 
     if (existingEvent?.processingStatus === WebhookProcessingStatus.PROCESSED) {
+      this.metrics.recordPaymentWebhookProcessed('duplicate', event.type);
       return {
         duplicate: true,
         eventId: event.id,
@@ -164,6 +170,7 @@ export class PaymentsService {
           processedAt: new Date(),
         },
       });
+      this.metrics.recordPaymentWebhookProcessed('processed', event.type);
     } catch (error) {
       await this.prisma.paymentWebhookEvent.update({
         where: { id: webhookEvent.id },
@@ -172,6 +179,7 @@ export class PaymentsService {
           processedAt: null,
         },
       });
+      this.metrics.recordPaymentWebhookProcessed('failed', event.type);
       throw error;
     }
 
