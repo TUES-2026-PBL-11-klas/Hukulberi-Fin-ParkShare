@@ -25,3 +25,27 @@ data:
               severity: warning
             annotations:
               summary: ParkShare frontend metrics endpoint is down
+
+          - alert: ParkShareBackendHighErrorRate
+            expr: sum(rate(parkshare_http_request_errors_total[5m])) > 0.05
+            for: 2m
+            labels:
+              severity: warning
+            annotations:
+              summary: ParkShare backend is returning elevated HTTP errors
+
+          - alert: ParkShareBackendSlowRequests
+            expr: histogram_quantile(0.95, sum by (le) (rate(parkshare_http_request_duration_seconds_bucket[5m]))) > 1
+            for: 5m
+            labels:
+              severity: warning
+            annotations:
+              summary: ParkShare backend p95 request latency is above one second
+
+          - alert: ParkShareCheckoutFailures
+            expr: sum(increase(parkshare_payments_checkout_failed_total[10m])) > 0
+            for: 1m
+            labels:
+              severity: warning
+            annotations:
+              summary: ParkShare payment checkout failures were detected
