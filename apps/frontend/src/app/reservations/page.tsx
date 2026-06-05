@@ -285,15 +285,27 @@ function ReservationSection({
 }
 
 export default function ReservationsPage() {
-  const [storedToken] = useState(() => readToken());
+  const [storedToken, setStoredToken] = useState<string | null>(null);
+  const [isAuthReady, setIsAuthReady] = useState(false);
   const [bookings, setBookings] = useState<BookingDto[]>([]);
-  const [isLoading, setIsLoading] = useState(Boolean(storedToken));
-  const [error, setError] = useState(
-    storedToken ? "" : "Sign in to view your reservations.",
-  );
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState("");
   const [cancelingId, setCancelingId] = useState("");
   const [paymentNotice, setPaymentNotice] = useState("");
   const [refreshKey, setRefreshKey] = useState(0);
+
+  useEffect(() => {
+    window.setTimeout(() => {
+      const token = readToken();
+      setStoredToken(token);
+      setIsAuthReady(true);
+
+      if (!token) {
+        setIsLoading(false);
+        setError("Sign in to view your reservations.");
+      }
+    }, 0);
+  }, []);
 
   useEffect(() => {
     if (!storedToken || typeof window === "undefined") {
@@ -312,11 +324,6 @@ export default function ReservationsPage() {
 
     if (paidCheckoutSessionId === "{CHECKOUT_SESSION_ID}") {
       window.history.replaceState(null, "", window.location.pathname);
-      window.setTimeout(() => {
-        setPaymentNotice(
-          "Stripe returned without a real checkout session id. Start Checkout again so ParkShare can confirm the paid reservation.",
-        );
-      }, 0);
       return;
     }
 
@@ -369,6 +376,10 @@ export default function ReservationsPage() {
   }, [storedToken]);
 
   useEffect(() => {
+    if (!isAuthReady) {
+      return;
+    }
+
     if (!storedToken) {
       return;
     }
@@ -404,7 +415,7 @@ export default function ReservationsPage() {
     }
 
     void loadReservations();
-  }, [refreshKey, storedToken]);
+  }, [isAuthReady, refreshKey, storedToken]);
 
   const { activeBookings, oldBookings } = useMemo(() => {
     const now = new Date();

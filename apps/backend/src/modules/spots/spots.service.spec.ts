@@ -125,6 +125,7 @@ describe('SpotsService', () => {
           updatedAt: new Date(),
           hostUser: { id: 'user-1', name: 'Host 1' },
           reviews: [],
+          bookings: [{ id: 'booking-1' }],
         },
       ];
 
@@ -134,6 +135,7 @@ describe('SpotsService', () => {
       const result = await service.searchSpots({});
 
       expect(result.data).toHaveLength(1);
+      expect(result.data[0]).toMatchObject({ availableSpaces: 1 });
       expect(result.total).toBe(1);
     });
 
@@ -175,7 +177,7 @@ describe('SpotsService', () => {
         updatedAt: new Date(),
         hostUser: { id: 'user-1', name: 'Host 1', email: 'host@example.com' },
         reviews: [],
-        bookings: [],
+        bookings: [{ id: 'booking-1' }],
       };
 
       const findFirstSpot = jest
@@ -186,6 +188,7 @@ describe('SpotsService', () => {
 
       expect(result).toBeDefined();
       expect(result.id).toBe('1');
+      expect(result).toMatchObject({ availableSpaces: 1 });
       expect(findFirstSpot).toHaveBeenCalledWith(
         expect.objectContaining({
           where: {
@@ -230,6 +233,70 @@ describe('SpotsService', () => {
           availableFrom: '19:00',
         }),
       ).rejects.toThrow('Available from time must be earlier');
+      expect(updateSpot).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('updateSpotActive', () => {
+    it('should toggle whether a spot is active for admin moderation', async () => {
+      const existingSpot = {
+        id: '1',
+        hostUserId: 'user-1',
+        title: 'Test Spot',
+        description: null,
+        address: '123 Main St',
+        latitude: 40.7128,
+        longitude: -74.006,
+        pricePerHour: 1500,
+        spaceCount: 2,
+        availableDays: ['MON', 'TUE', 'WED'],
+        availableFrom: '09:00',
+        availableUntil: '18:00',
+        photoUrls: [],
+        verificationStatus: 'VERIFIED',
+        verificationNote: null,
+        verifiedAt: null,
+        isActive: true,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+      const updatedSpot = {
+        ...existingSpot,
+        isActive: false,
+        hostUser: {
+          id: 'user-1',
+          name: 'Test Host',
+          email: 'host@example.com',
+          status: 'ACTIVE',
+        },
+      };
+
+      jest.spyOn(prisma.spot, 'findUnique').mockResolvedValue(existingSpot);
+      const updateSpot = jest
+        .spyOn(prisma.spot, 'update')
+        .mockResolvedValue(updatedSpot);
+
+      const result = await service.updateSpotActive('1', { isActive: false });
+
+      expect(result).toEqual(updatedSpot);
+      expect(updateSpot).toHaveBeenCalledWith({
+        where: { id: '1' },
+        data: { isActive: false },
+        include: {
+          hostUser: {
+            select: { id: true, name: true, email: true, status: true },
+          },
+        },
+      });
+    });
+
+    it('should reject active toggles for missing spots', async () => {
+      jest.spyOn(prisma.spot, 'findUnique').mockResolvedValue(null);
+      const updateSpot = jest.spyOn(prisma.spot, 'update');
+
+      await expect(
+        service.updateSpotActive('missing', { isActive: false }),
+      ).rejects.toThrow('Spot with ID missing not found');
       expect(updateSpot).not.toHaveBeenCalled();
     });
   });

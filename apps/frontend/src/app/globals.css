@@ -364,6 +364,12 @@ body {
   font-weight: 900;
 }
 
+.garage-popup small {
+  color: #475569;
+  font-size: 0.74rem;
+  font-weight: 800;
+}
+
 .garage-popup div {
   display: block;
   padding-top: 0.18rem;
@@ -383,6 +389,20 @@ body {
   font-weight: 850;
   padding: 0 0.72rem;
   text-decoration: none;
+}
+
+.garage-popup-full {
+  display: inline-flex;
+  width: 8.25rem;
+  min-height: 2.05rem;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9999px;
+  background: #e2e8f0;
+  color: #475569;
+  font-size: 0.76rem;
+  font-weight: 850;
+  padding: 0 0.72rem;
 }
 
 .map-profile-button {

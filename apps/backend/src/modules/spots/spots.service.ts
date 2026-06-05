@@ -6,13 +6,19 @@ import {
   Logger,
 } from '@nestjs/common';
 import { Counter, Histogram, Gauge, register } from 'prom-client';
-import { Prisma, ReviewRating, SpotVerificationStatus } from '@prisma/client';
+import {
+  BookingStatus,
+  Prisma,
+  ReviewRating,
+  SpotVerificationStatus,
+} from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import {
   CreateSpotDto,
   UpdateSpotDto,
   SearchSpotsDto,
   UpdateSpotVerificationDto,
+  UpdateSpotActiveDto,
 } from './dto';
 
 @Injectable()
@@ -97,6 +103,7 @@ export class SpotsService {
    */
   async searchSpots(query: SearchSpotsDto) {
     const startTime = Date.now();
+    const now = new Date();
     const latitude = this.toFiniteNumber(query.latitude);
     const longitude = this.toFiniteNumber(query.longitude);
     const radiusKm = this.toFiniteNumber(query.radiusKm);
@@ -164,6 +171,16 @@ export class SpotsService {
             rating: true,
           },
         },
+        bookings: {
+          where: {
+            status: { in: [BookingStatus.HOLD, BookingStatus.CONFIRMED] },
+            startAt: { lte: now },
+            endAt: { gt: now },
+          },
+          select: {
+            id: true,
+          },
+        },
       },
       take: limit,
       skip: offset,
@@ -193,6 +210,11 @@ export class SpotsService {
       return {
         ...spot,
         averageRating: parseFloat(avgRating.toFixed(2)),
+        availableSpaces: this.getAvailableSpaces(
+          spot.spaceCount,
+          spot.bookings,
+        ),
+        bookings: undefined,
         reviewCount: spot.reviews.length,
         reviews: undefined, // Remove detailed reviews
       };
@@ -218,6 +240,7 @@ export class SpotsService {
    * Get single spot by ID
    */
   async getSpotById(id: string) {
+    const now = new Date();
     const spot = await this.prisma.spot.findFirst({
       where: {
         id,
@@ -244,11 +267,13 @@ export class SpotsService {
           orderBy: { createdAt: 'desc' },
         },
         bookings: {
-          where: { status: 'CONFIRMED' },
+          where: {
+            status: { in: [BookingStatus.HOLD, BookingStatus.CONFIRMED] },
+            startAt: { lte: now },
+            endAt: { gt: now },
+          },
           select: {
             id: true,
-            startAt: true,
-            endAt: true,
           },
         },
       },
@@ -274,8 +299,17 @@ export class SpotsService {
     return {
       ...spot,
       averageRating: parseFloat(avgRating.toFixed(2)),
+      availableSpaces: this.getAvailableSpaces(spot.spaceCount, spot.bookings),
+      bookings: undefined,
       reviewCount: spot.reviews.length,
     };
+  }
+
+  private getAvailableSpaces(
+    spaceCount: number,
+    activeBookings: Array<unknown>,
+  ): number {
+    return Math.max(spaceCount - activeBookings.length, 0);
   }
 
   /**
@@ -343,6 +377,28 @@ export class SpotsService {
         isActive:
           updateSpotVerificationDto.status === SpotVerificationStatus.VERIFIED,
       },
+      include: {
+        hostUser: {
+          select: { id: true, name: true, email: true, status: true },
+        },
+      },
+    });
+
+    void this.updateActiveSpots();
+
+    return updated;
+  }
+
+  async updateSpotActive(id: string, updateSpotActiveDto: UpdateSpotActiveDto) {
+    const spot = await this.prisma.spot.findUnique({ where: { id } });
+
+    if (!spot) {
+      throw new NotFoundException(`Spot with ID ${id} not found`);
+    }
+
+    const updated = await this.prisma.spot.update({
+      where: { id },
+      data: { isActive: updateSpotActiveDto.isActive },
       include: {
         hostUser: {
           select: { id: true, name: true, email: true, status: true },

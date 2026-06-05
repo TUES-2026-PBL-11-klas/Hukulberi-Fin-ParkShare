@@ -16,6 +16,7 @@ import {
   UpdateSpotDto,
   SearchSpotsDto,
   UpdateSpotVerificationDto,
+  UpdateSpotActiveDto,
 } from './dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CurrentUser } from '../auth/current-user.decorator';
@@ -95,6 +96,16 @@ export class SpotsController {
       id,
       updateSpotVerificationDto,
     );
+  }
+
+  @Patch(':id/admin-active')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
+  async updateActive(
+    @Param('id') id: string,
+    @Body() updateSpotActiveDto: UpdateSpotActiveDto,
+  ) {
+    return this.spotsService.updateSpotActive(id, updateSpotActiveDto);
   }
 
   /**

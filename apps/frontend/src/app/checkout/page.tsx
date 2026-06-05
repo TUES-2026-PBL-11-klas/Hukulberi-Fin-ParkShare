@@ -18,7 +18,10 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
 
-function readErrorMessage(payload: unknown): string {
+function readErrorMessage(
+  payload: unknown,
+  fallback = "Could not start Stripe Checkout.",
+): string {
   if (isRecord(payload)) {
     const message = payload.message;
 
@@ -26,7 +29,7 @@ function readErrorMessage(payload: unknown): string {
       return message.join(" ");
     }
 
-    if (typeof message === "string") {
+    if (typeof message === "string" && message.trim()) {
       return message;
     }
   }
@@ -35,7 +38,7 @@ function readErrorMessage(payload: unknown): string {
     return payload;
   }
 
-  return "Could not start Stripe Checkout.";
+  return fallback;
 }
 
 async function readResponsePayload(response: Response): Promise<unknown> {
@@ -53,13 +56,6 @@ async function readResponsePayload(response: Response): Promise<unknown> {
   return text.trim() || null;
 }
 
-function formatDateTime(value: string): string {
-  return new Intl.DateTimeFormat("en", {
-    dateStyle: "medium",
-    timeStyle: "short",
-  }).format(new Date(value));
-}
-
 function readToken(): string | null {
   if (typeof window === "undefined") {
     return null;
@@ -68,30 +64,75 @@ function readToken(): string | null {
   return localStorage.getItem("parkshare_access_token");
 }
 
-function formatBookingStatus(status: BookingDto["status"]): string {
-  if (status === "HOLD") {
-    return "AWAITING PAYMENT";
-  }
+function formatMoney(amount: number, currency: string): string {
+  return new Intl.NumberFormat("en", {
+    currency: currency.toUpperCase(),
+    currencyDisplay: "code",
+    style: "currency",
+  }).format(amount / 100);
+}
 
-  return status;
+function formatDateTime(value: string): string {
+  return new Intl.DateTimeFormat("en", {
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(new Date(value));
+}
+
+function formatDuration(startAt: string, endAt: string): string {
+  const start = new Date(startAt).getTime();
+  const end = new Date(endAt).getTime();
+  const hours = Math.max((end - start) / (60 * 60 * 1000), 0);
+
+  return `${hours.toFixed(1)} ${hours === 1 ? "hour" : "hours"}`;
+}
+
+function getStatusLabel(status: BookingDto["status"]): string {
+  if (status === "HOLD") return "Awaiting payment";
+  if (status === "CONFIRMED") return "Confirmed";
+  if (status === "CANCELED") return "Canceled";
+  return "Expired";
+}
+
+function getStatusClasses(status: BookingDto["status"]): string {
+  if (status === "HOLD") return "bg-amber-100 text-amber-800";
+  if (status === "CONFIRMED") return "bg-emerald-100 text-emerald-800";
+  if (status === "CANCELED") return "bg-rose-100 text-rose-700";
+  return "bg-slate-200 text-slate-700";
 }
 
 function CheckoutPageContent() {
   const searchParams = useSearchParams();
   const bookingId = searchParams.get("bookingId");
-  const [storedToken] = useState(() => readToken());
+  const [storedToken, setStoredToken] = useState<string | null>(null);
+  const [isAuthReady, setIsAuthReady] = useState(false);
   const [booking, setBooking] = useState<BookingDto | null>(null);
-  const [isLoading, setIsLoading] = useState(Boolean(bookingId && storedToken));
+  const [isLoading, setIsLoading] = useState(Boolean(bookingId));
   const [error, setError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
-    if (!bookingId || !storedToken) {
+    const authTimer = window.setTimeout(() => {
+      setStoredToken(readToken());
+      setIsAuthReady(true);
+    }, 0);
+
+    return () => window.clearTimeout(authTimer);
+  }, []);
+
+  useEffect(() => {
+    if (!isAuthReady) {
       return;
+    }
+
+    if (!bookingId || !storedToken) {
+      const loadingTimer = window.setTimeout(() => setIsLoading(false), 0);
+      return () => window.clearTimeout(loadingTimer);
     }
 
     async function loadBooking() {
       setError("");
+      setIsLoading(true);
 
       try {
         const response = await fetch(
@@ -106,7 +147,9 @@ function CheckoutPageContent() {
         const payload = await readResponsePayload(response);
 
         if (!response.ok) {
-          throw new Error(readErrorMessage(payload));
+          throw new Error(
+            readErrorMessage(payload, "Could not load booking details."),
+          );
         }
 
         if (!isRecord(payload) || typeof payload.id !== "string") {
@@ -126,19 +169,19 @@ function CheckoutPageContent() {
     }
 
     void loadBooking();
-  }, [bookingId, storedToken]);
+  }, [bookingId, isAuthReady, storedToken]);
 
-  const checkoutDisplayAmount = useMemo(() => {
-    if (!booking) {
-      return "€12.00";
-    }
-
-    return new Intl.NumberFormat("en", {
-      currency: booking.currency.toUpperCase(),
-      currencyDisplay: "code",
-      style: "currency",
-    }).format(booking.amount / 100);
+  const amount = useMemo(() => {
+    if (!booking) return "EUR 0.00";
+    return formatMoney(booking.amount, booking.currency);
   }, [booking]);
+
+  const duration = useMemo(() => {
+    if (!booking) return "Not loaded";
+    return formatDuration(booking.startAt, booking.endAt);
+  }, [booking]);
+
+  const canPay = booking?.status === "HOLD";
 
   async function handleCheckout() {
     setError("");
@@ -156,7 +199,7 @@ function CheckoutPageContent() {
       }
 
       const successUrl = `${window.location.origin}/reservations?payment=success&session_id={CHECKOUT_SESSION_ID}`;
-      const cancelUrl = new URL("/", window.location.origin);
+      const cancelUrl = new URL("/reservations", window.location.origin);
       cancelUrl.searchParams.set("payment", "cancel");
 
       const response = await fetch(
@@ -202,190 +245,215 @@ function CheckoutPageContent() {
   }
 
   return (
-    <main className="min-h-screen bg-[radial-gradient(circle_at_top_left,_rgba(52,211,153,0.18),_transparent_30%),radial-gradient(circle_at_bottom_right,_rgba(20,184,166,0.12),_transparent_28%),linear-gradient(180deg,_#f8fafc_0%,_#eef6ee_100%)] px-4 py-6 text-slate-900 md:px-8 md:py-8">
+    <main className="min-h-screen bg-slate-50 px-4 py-6 text-slate-900 md:px-8">
       <PageViewBeacon page="checkout" />
-      <div className="mx-auto flex min-h-[calc(100vh-3rem)] w-full max-w-5xl flex-col gap-6">
-        <header className="flex flex-col gap-4 rounded-[1.75rem] bg-white/85 p-5 shadow-[0_12px_40px_rgba(15,23,42,0.08)] ring-1 ring-black/5 backdrop-blur md:flex-row md:items-end md:justify-between md:p-6">
-          <div className="space-y-2">
-            <p className="text-sm font-semibold uppercase tracking-[0.28em] text-emerald-600">
-              Stripe checkout
-            </p>
-            <h1 className="font-[var(--font-manrope)] text-3xl font-bold tracking-tight text-slate-900 md:text-4xl">
-              Confirm your reservation and complete payment.
-            </h1>
-            <p className="max-w-2xl text-sm leading-6 text-slate-600 md:text-base">
-              Stripe handles the card details. ParkShare confirms the reservation
-              after payment and keeps the host payout pending during the review window.
-            </p>
-          </div>
+
+      <div className="mx-auto grid w-full max-w-6xl gap-6">
+        <nav className="flex items-center justify-between gap-4">
           <Link
             href="/"
-            className="inline-flex h-11 items-center justify-center rounded-full bg-slate-100 px-4 text-sm font-semibold text-slate-700 transition hover:bg-slate-200"
+            className="inline-flex h-11 items-center justify-center rounded-full bg-white px-5 text-sm font-bold text-slate-900 shadow-sm transition hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500"
           >
             Back to map
           </Link>
+          <Link
+            href="/reservations"
+            className="inline-flex h-11 items-center justify-center rounded-full bg-slate-900 px-5 text-sm font-bold text-white shadow-sm transition hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500"
+          >
+            Reservations
+          </Link>
+        </nav>
+
+        <header className="grid gap-4 rounded-2xl bg-white p-6 shadow-sm md:p-8">
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div className="max-w-3xl">
+              <p className="text-sm font-bold uppercase tracking-[0.24em] text-emerald-700">
+                Secure checkout
+              </p>
+              <h1 className="mt-3 font-[var(--font-manrope)] text-3xl font-bold tracking-tight text-slate-950 md:text-4xl">
+                Review your reservation before payment.
+              </h1>
+              <p className="mt-3 max-w-2xl text-base leading-7 text-slate-600">
+                Stripe handles card details in test mode. ParkShare confirms the
+                reservation after the payment is verified.
+              </p>
+            </div>
+            {booking ? (
+              <span
+                className={`rounded-full px-4 py-2 text-xs font-black uppercase tracking-[0.18em] ${getStatusClasses(
+                  booking.status,
+                )}`}
+              >
+                {getStatusLabel(booking.status)}
+              </span>
+            ) : null}
+          </div>
         </header>
 
         {!bookingId ? (
-          <section className="rounded-[1.75rem] bg-white p-6 shadow-[0_12px_40px_rgba(15,23,42,0.08)] ring-1 ring-black/5">
-            <h2 className="font-[var(--font-manrope)] text-2xl font-semibold tracking-tight text-slate-900">
+          <section className="rounded-2xl bg-rose-50 p-6 text-rose-700 shadow-sm">
+            <h2 className="font-[var(--font-manrope)] text-xl font-bold">
               No booking selected
             </h2>
-            <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
-              Create a reservation from the booking flow first. The checkout page
-              needs a booking id so it can fetch the server-owned reservation details.
+            <p className="mt-2 text-sm font-medium">
+              Start from a spot page so checkout receives a booking id.
             </p>
           </section>
         ) : null}
 
-        <section className="grid gap-6 lg:grid-cols-[1.05fr_0.95fr]">
-          <article className="rounded-[1.75rem] bg-white p-6 shadow-[0_12px_40px_rgba(15,23,42,0.08)] ring-1 ring-black/5 md:p-8">
-            <div className="flex items-center justify-between gap-4">
-              <div className="space-y-2">
-                <p className="text-sm font-semibold uppercase tracking-[0.25em] text-slate-500">
-                  Booking summary
-                </p>
-                <h2 className="font-[var(--font-manrope)] text-2xl font-semibold tracking-tight text-slate-900">
-                  {booking?.spotLabel ?? "Waiting for booking details"}
-                </h2>
-              </div>
-              {booking ? (
-                <span
-                  className={`rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.22em] ${
-                    booking.status === "HOLD"
-                      ? "bg-amber-100 text-amber-800"
-                      : booking.status === "CONFIRMED"
-                        ? "bg-emerald-100 text-emerald-800"
-                        : booking.status === "CANCELED"
-                          ? "bg-rose-100 text-rose-700"
-                          : "bg-slate-200 text-slate-700"
-                  }`}
-                >
-                  {formatBookingStatus(booking.status)}
-                </span>
-              ) : null}
+        {isAuthReady && !storedToken ? (
+          <section className="rounded-2xl bg-amber-50 p-6 text-amber-800 shadow-sm">
+            <h2 className="font-[var(--font-manrope)] text-xl font-bold">
+              Sign in required
+            </h2>
+            <p className="mt-2 text-sm font-medium">
+              Checkout needs your ParkShare session to load and pay this
+              reservation.
+            </p>
+          </section>
+        ) : null}
+
+        <section className="grid items-stretch gap-6 lg:grid-cols-[minmax(0,1.08fr)_minmax(360px,0.92fr)]">
+          <article className="grid h-full content-start gap-6 rounded-2xl bg-white p-6 shadow-sm md:p-8">
+            <div>
+              <p className="text-sm font-bold uppercase tracking-[0.22em] text-slate-500">
+                Reservation
+              </p>
+              <h2 className="mt-3 font-[var(--font-manrope)] text-2xl font-bold tracking-tight text-slate-950">
+                {isLoading
+                  ? "Loading booking details"
+                  : booking?.spotLabel ?? "Booking details unavailable"}
+              </h2>
             </div>
 
             {isLoading ? (
-              <div className="mt-6 rounded-[1.5rem] bg-slate-50 p-5 text-sm text-slate-500">
-                Loading booking details...
+              <div className="grid gap-4">
+                <div className="h-28 animate-pulse rounded-2xl bg-slate-100" />
+                <div className="grid gap-4 md:grid-cols-3">
+                  <div className="h-24 animate-pulse rounded-2xl bg-slate-100" />
+                  <div className="h-24 animate-pulse rounded-2xl bg-slate-100" />
+                  <div className="h-24 animate-pulse rounded-2xl bg-slate-100" />
+                </div>
               </div>
             ) : booking ? (
-              <div className="mt-6 grid gap-4">
-                <div className="rounded-[1.5rem] bg-slate-50 p-5">
-                  <div className="grid gap-3 md:grid-cols-2">
-                    <div>
-                      <p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-500">
-                        Time window
-                      </p>
-                      <p className="mt-2 text-sm font-medium text-slate-900">
-                        {formatDateTime(booking.startAt)}
-                      </p>
-                      <p className="text-sm text-slate-600">
-                        to {formatDateTime(booking.endAt)}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-500">
-                        Total
-                      </p>
-                      <p className="mt-2 text-2xl font-bold tracking-tight text-slate-900">
-                        {checkoutDisplayAmount}
-                      </p>
-                      <p className="text-sm text-slate-600">
-                      Reservation #{booking.id}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="grid gap-3 rounded-[1.5rem] bg-emerald-50 p-5 text-sm text-emerald-900 md:grid-cols-3">
+              <>
+                <div className="grid gap-4 rounded-2xl bg-slate-100 p-5 md:grid-cols-2">
                   <div>
-                    <p className="text-xs font-semibold uppercase tracking-[0.22em] text-emerald-700">
-                      Spot id
-                    </p>
-                    <p className="mt-2 font-medium">{booking.spotId}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs font-semibold uppercase tracking-[0.22em] text-emerald-700">
-                      Payment window
-                    </p>
-                    <p className="mt-2 font-medium">
-                      {formatDateTime(booking.expiresAt)}
+                    <p className="text-sm font-bold text-slate-500">Starts</p>
+                    <p className="mt-2 text-lg font-black text-slate-950">
+                      {formatDateTime(booking.startAt)}
                     </p>
                   </div>
                   <div>
-                    <p className="text-xs font-semibold uppercase tracking-[0.22em] text-emerald-700">
-                      Currency
+                    <p className="text-sm font-bold text-slate-500">Ends</p>
+                    <p className="mt-2 text-lg font-black text-slate-950">
+                      {formatDateTime(booking.endAt)}
                     </p>
-                    <p className="mt-2 font-medium">{booking.currency.toUpperCase()}</p>
                   </div>
                 </div>
 
-                {booking.status === "CONFIRMED" ? (
-                  <div className="rounded-[1.5rem] bg-emerald-50 p-5 text-sm leading-6 text-emerald-800">
-                    This booking is already confirmed. You can return to your booking
-                    list or review the payment result on the home map.
+                <div className="grid gap-4 md:grid-cols-3">
+                  <div className="rounded-2xl bg-slate-100 p-5">
+                    <p className="text-sm font-bold text-slate-500">Duration</p>
+                    <p className="mt-2 text-xl font-black text-slate-950">
+                      {duration}
+                    </p>
                   </div>
-                ) : null}
-                {booking.status === "EXPIRED" ? (
-                  <div className="rounded-[1.5rem] bg-rose-50 p-5 text-sm leading-6 text-rose-700">
-                    This reservation payment window expired. Go back to the booking
-                    planner and create a new reservation.
+                  <div className="rounded-2xl bg-slate-100 p-5">
+                    <p className="text-sm font-bold text-slate-500">Total</p>
+                    <p className="mt-2 text-xl font-black text-emerald-800">
+                      {amount}
+                    </p>
                   </div>
-                ) : null}
-
-                {error ? (
-                  <p className="rounded-[1.5rem] bg-rose-50 p-5 text-sm font-medium text-rose-700">
-                    {error}
-                  </p>
-                ) : null}
-
-                <div className="flex flex-wrap gap-3">
-                  <button
-                    type="button"
-                    onClick={handleCheckout}
-                    disabled={isSubmitting || booking.status !== "HOLD"}
-                    className="inline-flex h-12 items-center justify-center rounded-full bg-gradient-to-br from-emerald-400 to-teal-500 px-5 text-sm font-semibold text-white shadow-sm transition hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-60"
-                  >
-                    {isSubmitting ? "Opening Checkout..." : "Pay with Stripe"}
-                  </button>
-                  <Link
-                    href="/"
-                    className="inline-flex h-12 items-center justify-center rounded-full bg-slate-100 px-5 text-sm font-semibold text-slate-700 transition hover:bg-slate-200"
-                  >
-                    Back to map
-                  </Link>
+                  <div className="rounded-2xl bg-slate-100 p-5">
+                    <p className="text-sm font-bold text-slate-500">Currency</p>
+                    <p className="mt-2 text-xl font-black text-slate-950">
+                      {booking.currency.toUpperCase()}
+                    </p>
+                  </div>
                 </div>
-              </div>
+
+                <div className="rounded-2xl bg-emerald-50 p-5 text-sm font-bold leading-6 text-emerald-900">
+                  Pay with Stripe to confirm this reservation. After payment,
+                  it will appear as confirmed in your reservations.
+                </div>
+              </>
             ) : (
-              <div className="mt-6 rounded-[1.5rem] bg-slate-50 p-5 text-sm leading-6 text-slate-600">
-                We could not load the booking details. Check your sign-in state and go
-                back to the booking planner if needed.
+              <div className="rounded-2xl bg-slate-100 p-5 text-sm font-medium leading-6 text-slate-600">
+                We could not load this booking. Check that you are signed in
+                with the account that created the reservation.
               </div>
             )}
+
+            {error ? (
+              <p className="rounded-2xl bg-rose-50 p-5 text-sm font-bold leading-6 text-rose-700">
+                {error}
+              </p>
+            ) : null}
           </article>
 
-          <aside className="rounded-[1.75rem] bg-slate-900 p-6 text-white shadow-[0_12px_40px_rgba(15,23,42,0.08)] md:p-8">
-            <p className="text-sm font-semibold uppercase tracking-[0.28em] text-emerald-300">
-              What happens next
-            </p>
-            <h2 className="mt-2 font-[var(--font-manrope)] text-2xl font-semibold tracking-tight">
-              Stripe completes the payment, then ParkShare confirms the reservation.
-            </h2>
-            <ol className="mt-6 space-y-4 text-sm leading-6 text-slate-200">
-              <li className="rounded-[1.25rem] bg-white/5 p-4">
-                1. The checkout request includes the booking id and server-owned
-                details.
-              </li>
-              <li className="rounded-[1.25rem] bg-white/5 p-4">
-                2. Stripe sends the event back to ParkShare through the webhook route.
-              </li>
-              <li className="rounded-[1.25rem] bg-white/5 p-4">
-                3. The reservation switches to confirmed, and host payout waits for
-                the 24-hour review window.
-              </li>
-            </ol>
+          <aside className="h-full">
+            <section className="flex h-full flex-col rounded-2xl bg-white p-6 shadow-sm md:p-8">
+              <div>
+                <p className="text-sm font-bold uppercase tracking-[0.22em] text-slate-500">
+                  Payment
+                </p>
+                <h2 className="mt-3 font-[var(--font-manrope)] text-4xl font-black tracking-tight text-slate-950">
+                  {amount}
+                </h2>
+                <p className="mt-3 text-sm font-medium leading-6 text-slate-500">
+                  Complete payment to lock this reservation. ParkShare confirms
+                  it after Stripe returns a successful checkout.
+                </p>
+              </div>
+
+              {booking?.status === "CONFIRMED" ? (
+                <div className="mt-6 rounded-2xl bg-emerald-50 p-5 text-sm font-bold leading-6 text-emerald-800">
+                  This reservation is already confirmed. No extra payment is
+                  needed.
+                </div>
+              ) : null}
+
+              {booking?.status === "EXPIRED" ? (
+                <div className="mt-6 rounded-2xl bg-rose-50 p-5 text-sm font-bold leading-6 text-rose-700">
+                  This reservation expired. Create a new reservation from the
+                  spot page.
+                </div>
+              ) : null}
+
+              <div className="mt-auto grid gap-4 pt-8">
+                <div className="grid gap-3 rounded-2xl bg-slate-100 p-5">
+                  <div className="flex items-center justify-between gap-4">
+                    <span className="text-sm font-bold text-slate-500">
+                      Reservation total
+                    </span>
+                    <strong className="text-lg font-black text-slate-950">
+                      {amount}
+                    </strong>
+                  </div>
+                  <div className="flex items-center justify-between gap-4">
+                    <span className="text-sm font-bold text-slate-500">
+                      Processing
+                    </span>
+                    <strong className="text-lg font-black text-emerald-800">
+                      Stripe
+                    </strong>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={handleCheckout}
+                  disabled={!canPay || isSubmitting}
+                  className="inline-flex h-16 w-full items-center justify-center gap-3 rounded-2xl bg-[#635bff] px-6 text-lg font-black text-white shadow-[0_18px_36px_rgba(99,91,255,0.28)] transition hover:bg-[#5548f5] active:scale-[0.99] disabled:cursor-not-allowed disabled:bg-slate-300 disabled:text-slate-500 disabled:shadow-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#635bff] focus-visible:ring-offset-2"
+                >
+                  <span className="font-[Arial] text-2xl font-black tracking-[-0.06em]">
+                    Stripe
+                  </span>
+                  <span>{isSubmitting ? "Opening..." : "Pay with Stripe"}</span>
+                </button>
+              </div>
+            </section>
           </aside>
         </section>
       </div>
@@ -397,12 +465,12 @@ export default function CheckoutPage() {
   return (
     <Suspense
       fallback={
-        <main className="min-h-screen bg-[linear-gradient(180deg,_#f8fafc_0%,_#eef6ee_100%)] px-4 py-6 text-slate-900 md:px-8 md:py-8">
-          <div className="mx-auto flex min-h-[calc(100vh-3rem)] w-full max-w-5xl items-center justify-center">
-            <section className="rounded-[1.75rem] bg-white p-6 text-sm font-medium text-slate-600 shadow-[0_12px_40px_rgba(15,23,42,0.08)] ring-1 ring-black/5">
+        <main className="min-h-screen bg-slate-50 px-4 py-6 text-slate-900 md:px-8">
+          <section className="mx-auto grid min-h-[calc(100vh-3rem)] w-full max-w-6xl place-items-center">
+            <div className="rounded-2xl bg-white p-6 text-sm font-bold text-slate-600 shadow-sm">
               Loading checkout...
-            </section>
-          </div>
+            </div>
+          </section>
         </main>
       }
     >

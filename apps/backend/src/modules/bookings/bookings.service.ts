@@ -146,44 +146,47 @@ export class BookingsService implements OnModuleInit, OnModuleDestroy {
       );
     }
 
-    const overlap = await this.prisma.booking.findFirst({
-      where: {
-        spotId: input.spotId,
-        status: {
-          in: [PrismaBookingStatus.HOLD, PrismaBookingStatus.CONFIRMED],
-        },
-        startAt: { lt: endAt },
-        endAt: { gt: startAt },
-      },
-    });
-
-    if (overlap) {
-      throw new ConflictException(
-        'Spot is already booked for the selected time range',
-      );
-    }
-
     const expiresAt = new Date(Date.now() + HOLD_TTL_MINUTES * 60 * 1000);
 
     let booking: Booking;
 
     try {
-      booking = await this.prisma.booking.create({
-        data: {
-          spotId: input.spotId,
-          spotLabel: input.spotLabel.trim(),
-          driverUserId: input.driverUserId,
-          status: PrismaBookingStatus.HOLD,
-          amount: input.amount,
-          currency,
-          startAt,
-          endAt,
-          expiresAt,
-        },
-      });
-    } catch (error) {
-      this.metrics.recordBookingCreated(PrismaBookingStatus.HOLD);
+      booking = await this.prisma.$transaction(
+        async (tx) => {
+          const overlappingBookings = await tx.booking.count({
+            where: {
+              spotId: input.spotId,
+              status: {
+                in: [PrismaBookingStatus.HOLD, PrismaBookingStatus.CONFIRMED],
+              },
+              startAt: { lt: endAt },
+              endAt: { gt: startAt },
+            },
+          });
 
+          if (overlappingBookings >= Math.max(spot.spaceCount, 1)) {
+            throw new ConflictException(
+              'No spaces are available for the selected time range',
+            );
+          }
+
+          return tx.booking.create({
+            data: {
+              spotId: input.spotId,
+              spotLabel: input.spotLabel.trim(),
+              driverUserId: input.driverUserId,
+              status: PrismaBookingStatus.HOLD,
+              amount: input.amount,
+              currency,
+              startAt,
+              endAt,
+              expiresAt,
+            },
+          });
+        },
+        { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+      );
+    } catch (error) {
       if (this.isActiveBookingOverlapError(error)) {
         throw new ConflictException(
           'Spot is already booked for the selected time range',
@@ -192,6 +195,8 @@ export class BookingsService implements OnModuleInit, OnModuleDestroy {
 
       throw error;
     }
+
+    this.metrics.recordBookingCreated(PrismaBookingStatus.HOLD);
 
     return this.toBookingDto(booking);
   }

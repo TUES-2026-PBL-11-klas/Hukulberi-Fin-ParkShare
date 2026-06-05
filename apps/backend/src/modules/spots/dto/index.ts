@@ -15,6 +15,7 @@ import {
   MaxLength,
   Matches,
 } from 'class-validator';
+import { Type } from 'class-transformer';
 import { SpotVerificationStatus } from '@prisma/client';
 
 const UPDATE_SPOT_VERIFICATION_STATUSES = [
@@ -135,30 +136,36 @@ export class SearchSpotsDto {
   search?: string;
 
   @IsOptional()
+  @Type(() => Number)
   @IsLatitude()
   latitude?: number;
 
   @IsOptional()
+  @Type(() => Number)
   @IsLongitude()
   longitude?: number;
 
   @IsOptional()
+  @Type(() => Number)
   @IsNumber()
   @Min(0)
   radiusKm?: number;
 
   @IsOptional()
+  @Type(() => Number)
   @IsNumber()
   @Min(0)
   maxPrice?: number;
 
   @IsOptional()
+  @Type(() => Number)
   @IsNumber()
   @Min(1)
   @Max(100)
   limit?: number = 50;
 
   @IsOptional()
+  @Type(() => Number)
   @IsNumber()
   @Min(0)
   offset?: number = 0;
@@ -171,4 +178,9 @@ export class UpdateSpotVerificationDto {
   @IsOptional()
   @IsString()
   note?: string;
+}
+
+export class UpdateSpotActiveDto {
+  @IsBoolean()
+  isActive: boolean;
 }

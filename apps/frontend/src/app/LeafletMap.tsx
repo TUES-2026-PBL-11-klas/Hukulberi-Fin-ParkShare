@@ -2,10 +2,31 @@
 
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { mockGarages, type MapSpot } from "./mock-garages";
 
 type MapTheme = "light" | "dark";
 type AuthMode = "login" | "signup";
+type MapSpot = {
+  id: string;
+  title: string;
+  address: string;
+  latitude: number;
+  longitude: number;
+  pricePerHour: number;
+  spaceCount?: number;
+  availableSpaces?: number;
+  availableDays?: string[];
+  availableFrom?: string;
+  availableUntil?: string;
+  description?: string;
+  photoUrls?: string[];
+  hostUser?: {
+    id?: string;
+    name: string;
+    email?: string;
+  };
+  averageRating?: number;
+  reviewCount?: number;
+};
 type AuthUser = {
   id: string;
   email: string;
@@ -16,6 +37,10 @@ type AuthUser = {
 type AuthResponse = {
   user: AuthUser;
   accessToken: string;
+};
+
+type SpotSearchResponse = {
+  data?: MapSpot[];
 };
 
 type PaymentMessage = {
@@ -58,6 +83,22 @@ function escapeHtml(value: string) {
     };
     return entities[character];
   });
+}
+
+function getAvailableSpaces(spot: MapSpot): number {
+  return Math.max(spot.availableSpaces ?? spot.spaceCount ?? 1, 0);
+}
+
+function formatAvailableSpaces(availableSpaces: number): string {
+  if (availableSpaces === 0) {
+    return "Fully reserved right now";
+  }
+
+  if (availableSpaces === 1) {
+    return "1 space available now";
+  }
+
+  return `${availableSpaces} spaces available now`;
 }
 
 function readInitialPaymentMessage(): PaymentMessage | null {
@@ -108,7 +149,7 @@ export default function LeafletMap() {
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [garageSearch, setGarageSearch] = useState("");
-  const [mapSpots, setMapSpots] = useState<MapSpot[]>(mockGarages);
+  const [mapSpots, setMapSpots] = useState<MapSpot[]>([]);
   const [isAuthOpen, setIsAuthOpen] = useState(false);
   const [authMode, setAuthMode] = useState<AuthMode>("login");
   const [authName, setAuthName] = useState("");
@@ -125,22 +166,26 @@ export default function LeafletMap() {
 
   const loadSpotMarkers = useCallback(async () => {
     try {
-      const response = await fetch(`${apiBaseUrl}/api/v1/spots?limit=100`);
+      const response = await fetch(`${apiBaseUrl}/api/v1/spots?limit=100`, {
+        cache: "no-store",
+      });
 
       if (!response.ok) {
+        setMapSpots([]);
         return;
       }
 
-      const payload = (await response.json()) as { data?: MapSpot[] };
+      const payload = (await response.json()) as SpotSearchResponse;
       const backendSpots = payload.data ?? [];
       const validBackendSpots = backendSpots.filter(
         (spot) =>
           Number.isFinite(spot.latitude) && Number.isFinite(spot.longitude),
       );
 
-      setMapSpots([...validBackendSpots, ...mockGarages]);
+      setMapSpots(validBackendSpots);
     } catch {
       // Map markers are helpful, but the map itself should stay usable offline.
+      setMapSpots([]);
     }
   }, []);
 
@@ -292,6 +337,11 @@ export default function LeafletMap() {
 
     spotMarkerRefs.current.forEach((marker) => marker.remove());
     spotMarkerRefs.current = mapSpots.map((spot) => {
+      const availableSpaces = getAvailableSpaces(spot);
+      const reserveAction =
+        availableSpaces > 0
+          ? `<a href="/spots/${encodeURIComponent(spot.id)}">Reserve now</a>`
+          : '<span class="garage-popup-full">Fully reserved</span>';
       const marker = L.marker([spot.latitude, spot.longitude], {
         icon: L.divIcon({
           className: "parkshare-map-marker",
@@ -308,8 +358,9 @@ export default function LeafletMap() {
             <strong>${escapeHtml(spot.title)}</strong>
             <span>${escapeHtml(spot.address)}</span>
             <em>${(spot.pricePerHour / 100).toFixed(2)} EUR / hour</em>
+            <small>${escapeHtml(formatAvailableSpaces(availableSpaces))}</small>
             <div>
-              <a href="/spots/${encodeURIComponent(spot.id)}">Reserve now</a>
+              ${reserveAction}
             </div>
           </div>
         `,
