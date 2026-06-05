@@ -1,6 +1,6 @@
 'use client';
 
-import React, { Suspense, useState, useEffect } from 'react';
+import React, { Suspense, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { Star, ArrowLeft, Send, CheckCircle2 } from 'lucide-react';
