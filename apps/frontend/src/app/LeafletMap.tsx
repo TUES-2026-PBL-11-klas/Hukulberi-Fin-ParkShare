@@ -18,6 +18,10 @@ type AuthResponse = {
   accessToken: string;
 };
 
+type SpotSearchResponse = {
+  data?: MapSpot[];
+};
+
 type PaymentMessage = {
   tone: "success" | "warning";
   title: string;
@@ -125,22 +129,28 @@ export default function LeafletMap() {
 
   const loadSpotMarkers = useCallback(async () => {
     try {
-      const response = await fetch(`${apiBaseUrl}/api/v1/spots?limit=100`);
+      const response = await fetch(`${apiBaseUrl}/api/v1/spots?limit=100`, {
+        cache: "no-store",
+      });
 
       if (!response.ok) {
+        setMapSpots(mockGarages);
         return;
       }
 
-      const payload = (await response.json()) as { data?: MapSpot[] };
+      const payload = (await response.json()) as SpotSearchResponse;
       const backendSpots = payload.data ?? [];
       const validBackendSpots = backendSpots.filter(
         (spot) =>
           Number.isFinite(spot.latitude) && Number.isFinite(spot.longitude),
       );
 
-      setMapSpots([...validBackendSpots, ...mockGarages]);
+      setMapSpots(
+        validBackendSpots.length > 0 ? validBackendSpots : mockGarages,
+      );
     } catch {
       // Map markers are helpful, but the map itself should stay usable offline.
+      setMapSpots(mockGarages);
     }
   }, []);
 
